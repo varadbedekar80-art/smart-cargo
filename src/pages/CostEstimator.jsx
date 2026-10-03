@@ -33,7 +33,7 @@ function CostEstimator() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/cost-estimate',
+        'https://smart-cargo.onrender.com/api/cost-estimate',
         {
           method: 'POST',
           headers: {

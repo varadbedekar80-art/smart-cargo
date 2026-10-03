@@ -20,15 +20,15 @@ function Notifications() {
 
       const [shipmentsResponse, paymentsResponse, documentsResponse] =
         await Promise.all([
-          fetch('http://localhost:5000/api/shipments', {
+          fetch('https://smart-cargo.onrender.com/api/shipments', {
             headers,
           }),
 
-          fetch('http://localhost:5000/api/payments', {
+          fetch('https://smart-cargo.onrender.com/api/payments', {
             headers,
           }),
 
-          fetch('http://localhost:5000/api/documents', {
+          fetch('https://smart-cargo.onrender.com/api/documents', {
             headers,
           }),
         ])

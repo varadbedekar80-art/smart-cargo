@@ -27,7 +27,7 @@ function Settings() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/settings',
+        'https://smart-cargo.onrender.com/api/settings',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -93,7 +93,7 @@ function Settings() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/settings',
+        'https://smart-cargo.onrender.com/api/settings',
         {
           method: 'PUT',
           headers: {

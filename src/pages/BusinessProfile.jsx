@@ -30,7 +30,7 @@ function BusinessProfile() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/business-profile',
+        'https://smart-cargo.onrender.com/api/business-profile',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -88,7 +88,7 @@ function BusinessProfile() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/business-profile',
+        'https://smart-cargo.onrender.com/api/business-profile',
         {
           method: 'PUT',
           headers: {

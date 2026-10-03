@@ -1754,6 +1754,6 @@ app.get('/api/invoices', authMiddleware, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(
-    `Smart Cargo backend running on http://localhost:${PORT}`
+    `Smart Cargo backend running on https://smart-cargo.onrender.com:${PORT}`
   )
 })

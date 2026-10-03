@@ -31,7 +31,7 @@ function Documents() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/documents',
+        'https://smart-cargo.onrender.com/api/documents',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -70,7 +70,7 @@ function Documents() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/shipments',
+        'https://smart-cargo.onrender.com/api/shipments',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -130,7 +130,7 @@ function Documents() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/documents',
+        'https://smart-cargo.onrender.com/api/documents',
         {
           method: 'POST',
 
@@ -195,7 +195,7 @@ function Documents() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        `http://localhost:5000/api/documents/${id}/status`,
+        `https://smart-cargo.onrender.com/api/documents/${id}/status`,
         {
           method: 'PUT',
 
@@ -249,7 +249,7 @@ function Documents() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        `http://localhost:5000/api/documents/${id}`,
+        `https://smart-cargo.onrender.com/api/documents/${id}`,
         {
           method: 'DELETE',
 

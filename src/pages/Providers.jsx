@@ -13,7 +13,7 @@ function Providers() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/providers',
+        'https://smart-cargo.onrender.com/api/providers',
         {
           headers: {
             Authorization: `Bearer ${token}`,

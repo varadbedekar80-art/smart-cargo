@@ -15,7 +15,7 @@ function Tracking() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/tracking',
+        'https://smart-cargo.onrender.com/api/tracking',
         {
           headers: {
             Authorization: `Bearer ${token}`,

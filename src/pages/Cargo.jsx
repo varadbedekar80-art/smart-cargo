@@ -28,7 +28,7 @@ function Cargo() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/cargo',
+        'https://smart-cargo.onrender.com/api/cargo',
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -74,7 +74,7 @@ function Cargo() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'http://localhost:5000/api/cargo',
+        'https://smart-cargo.onrender.com/api/cargo',
         {
           method: 'POST',
           headers: {
@@ -137,7 +137,7 @@ function Cargo() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        `http://localhost:5000/api/cargo/${id}`,
+        `https://smart-cargo.onrender.com/api/cargo/${id}`,
         {
           method: 'DELETE',
           headers: {

@@ -560,7 +560,7 @@ function Dashboard() {
 
 
       const response = await fetch(
-        'http://localhost:5000/api/shipments',
+        'https://smart-cargo.onrender.com/api/shipments',
         {
           headers: {
             Authorization: `Bearer ${token}`,
