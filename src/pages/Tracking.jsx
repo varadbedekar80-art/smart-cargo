@@ -1,106 +1,123 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Tracking() {
   const [trackingNumber, setTrackingNumber] = useState('')
   const [shipment, setShipment] = useState(null)
+  const [trackingRecords, setTrackingRecords] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const shipments = {
-    'SC-10024': {
-      tracking: 'SC-10024',
-      cargo: 'Electronic Components',
-      origin: 'Mumbai, India',
-      destination: 'Dubai, UAE',
-      method: 'Air',
-      provider: 'Global Express',
-      currentStatus: 'In Transit',
-      estimatedDelivery: '05 Oct 2026',
-      timeline: [
-        {
-          title: 'Shipment Created',
-          date: '28 Sep 2026',
-          completed: true,
-        },
-        {
-          title: 'Pickup Completed',
-          date: '29 Sep 2026',
-          completed: true,
-        },
-        {
-          title: 'In Transit',
-          date: '30 Sep 2026',
-          completed: true,
-        },
-        {
-          title: 'Arrived at Destination',
-          date: '04 Oct 2026',
-          completed: false,
-        },
-        {
-          title: 'Delivered',
-          date: '05 Oct 2026',
-          completed: false,
-        },
-      ],
-    },
+  useEffect(() => {
+    fetchTracking()
+  }, [])
 
-    'SC-10023': {
-      tracking: 'SC-10023',
-      cargo: 'Cotton Textiles',
-      origin: 'Pune, India',
-      destination: 'Singapore',
-      method: 'Sea',
-      provider: 'Ocean Logistics',
-      currentStatus: 'Pending',
-      estimatedDelivery: '20 Oct 2026',
-      timeline: [
+  const fetchTracking = async () => {
+    try {
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/tracking',
         {
-          title: 'Shipment Created',
-          date: '27 Sep 2026',
-          completed: true,
-        },
-        {
-          title: 'Pickup Completed',
-          date: '30 Sep 2026',
-          completed: false,
-        },
-        {
-          title: 'In Transit',
-          date: '05 Oct 2026',
-          completed: false,
-        },
-        {
-          title: 'Arrived at Destination',
-          date: '18 Oct 2026',
-          completed: false,
-        },
-        {
-          title: 'Delivered',
-          date: '20 Oct 2026',
-          completed: false,
-        },
-      ],
-    },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to fetch tracking'
+        )
+      }
+
+      setTrackingRecords(data)
+
+    } catch (error) {
+      console.error(error)
+      alert(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatDate = (date) => {
+    if (!date) return 'Not available'
+
+    return new Date(date).toLocaleDateString(
+      'en-IN',
+      {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      }
+    )
+  }
+
+  const formatDateTime = (date) => {
+    if (!date) return 'Not available'
+
+    return new Date(date).toLocaleString(
+      'en-IN',
+      {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }
+    )
   }
 
   const handleTrack = () => {
-    const tracking = trackingNumber.trim().toUpperCase()
+    const tracking = trackingNumber
+      .trim()
+      .toUpperCase()
 
     if (!tracking) {
       alert('Please enter a tracking number.')
       return
     }
 
-    if (!shipments[tracking]) {
-      alert('Shipment not found. Try SC-10024 or SC-10023.')
+    const foundShipment = trackingRecords.find(
+      (item) =>
+        item.tracking_number.toUpperCase() === tracking
+    )
+
+    if (!foundShipment) {
       setShipment(null)
+
+      alert(
+        'Shipment not found. Please enter a valid tracking number.'
+      )
+
       return
     }
 
-    setShipment(shipments[tracking])
+    setShipment(foundShipment)
+  }
+
+  const getProgress = (status) => {
+    const statuses = [
+      'Pending',
+      'Picked Up',
+      'In Transit',
+      'Arrived at Destination',
+      'Delivered',
+    ]
+
+    const currentIndex = statuses.indexOf(status)
+
+    return statuses.map((item, index) => ({
+      title: item,
+      completed:
+        currentIndex >= index,
+    }))
   }
 
   return (
     <div>
+
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-800">
@@ -114,39 +131,53 @@ function Tracking() {
 
       {/* Search */}
       <div className="rounded-xl bg-white p-6 shadow-sm">
+
         <h2 className="mb-4 text-xl font-semibold">
           Track Shipment
         </h2>
 
         <div className="flex flex-col gap-3 md:flex-row">
+
           <input
             type="text"
             value={trackingNumber}
-            onChange={(e) => setTrackingNumber(e.target.value)}
+            onChange={(e) =>
+              setTrackingNumber(e.target.value)
+            }
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleTrack()
               }
             }}
-            placeholder="Enter tracking number e.g. SC-10024"
+            placeholder="Enter tracking number e.g. TRK-1791012945100"
             className="flex-1 rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
           />
 
           <button
             onClick={handleTrack}
-            className="rounded-lg bg-blue-600 px-8 py-3 font-medium text-white hover:bg-blue-700"
+            disabled={loading}
+            className="rounded-lg bg-blue-600 px-8 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Track Shipment
           </button>
+
         </div>
 
         <p className="mt-3 text-sm text-slate-400">
-          Demo tracking numbers: SC-10024, SC-10023
+          Enter the tracking number generated for your shipment.
         </p>
+
       </div>
 
+      {/* Loading */}
+      {loading && (
+        <div className="mt-6 rounded-xl bg-white p-8 text-center text-slate-500 shadow-sm">
+          Loading tracking information...
+        </div>
+      )}
+
       {/* Shipment Result */}
-      {shipment && (
+      {!loading && shipment && (
         <div className="mt-6 space-y-6">
 
           {/* Shipment Summary */}
@@ -160,12 +191,12 @@ function Tracking() {
                 </p>
 
                 <h2 className="mt-1 text-2xl font-bold">
-                  {shipment.tracking}
+                  {shipment.tracking_number}
                 </h2>
               </div>
 
               <span className="w-fit rounded-full bg-blue-100 px-4 py-2 font-medium text-blue-700">
-                {shipment.currentStatus}
+                {shipment.status}
               </span>
 
             </div>
@@ -174,11 +205,11 @@ function Tracking() {
 
               <div>
                 <p className="text-sm text-slate-500">
-                  Cargo
+                  Shipment
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {shipment.cargo}
+                  {shipment.shipment_number}
                 </p>
               </div>
 
@@ -208,7 +239,7 @@ function Tracking() {
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {shipment.method}
+                  {shipment.shipping_method}
                 </p>
               </div>
 
@@ -216,28 +247,61 @@ function Tracking() {
 
           </div>
 
-          {/* Provider and Delivery */}
-          <div className="grid gap-6 md:grid-cols-2">
+          {/* Location / Provider / Delivery */}
+          <div className="grid gap-6 md:grid-cols-3">
 
             <div className="rounded-xl bg-white p-6 shadow-sm">
+
+              <p className="text-sm text-slate-500">
+                Current Location
+              </p>
+
+              <p className="mt-2 text-xl font-bold">
+                {shipment.current_location || 'Not available'}
+              </p>
+
+            </div>
+
+            <div className="rounded-xl bg-white p-6 shadow-sm">
+
               <p className="text-sm text-slate-500">
                 Logistics Provider
               </p>
 
               <p className="mt-2 text-xl font-bold">
-                {shipment.provider}
+                {shipment.provider_name || 'Not Assigned'}
               </p>
+
             </div>
 
             <div className="rounded-xl bg-white p-6 shadow-sm">
+
               <p className="text-sm text-slate-500">
                 Estimated Delivery
               </p>
 
               <p className="mt-2 text-xl font-bold">
-                {shipment.estimatedDelivery}
+                {formatDate(
+                  shipment.estimated_delivery
+                )}
               </p>
+
             </div>
+
+          </div>
+
+          {/* Last Updated */}
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+
+            <p className="text-sm text-slate-500">
+              Last Updated
+            </p>
+
+            <p className="mt-2 font-semibold">
+              {formatDateTime(
+                shipment.last_updated
+              )}
+            </p>
 
           </div>
 
@@ -254,7 +318,9 @@ function Tracking() {
 
               <div className="space-y-8">
 
-                {shipment.timeline.map((event, index) => (
+                {getProgress(
+                  shipment.status
+                ).map((event, index) => (
 
                   <div
                     key={index}
@@ -270,6 +336,7 @@ function Tracking() {
                     />
 
                     <div>
+
                       <p
                         className={`font-semibold ${
                           event.completed
@@ -280,9 +347,6 @@ function Tracking() {
                         {event.title}
                       </p>
 
-                      <p className="mt-1 text-sm text-slate-500">
-                        {event.date}
-                      </p>
                     </div>
 
                   </div>
@@ -297,6 +361,7 @@ function Tracking() {
 
         </div>
       )}
+
     </div>
   )
 }

@@ -1,194 +1,187 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Providers() {
-  const [selectedProvider, setSelectedProvider] = useState(null)
+  const [providers, setProviders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const providers = [
-    {
-      id: 1,
-      name: 'Global Express',
-      type: 'International Logistics',
-      services: 'Air, Sea, Road',
-      delivery: '3–7 days',
-      rating: '4.8',
-      price: '$2,450',
-    },
-    {
-      id: 2,
-      name: 'Ocean Logistics',
-      type: 'Freight Forwarding',
-      services: 'Sea, Road',
-      delivery: '15–25 days',
-      rating: '4.6',
-      price: '$1,850',
-    },
-    {
-      id: 3,
-      name: 'Swift Cargo',
-      type: 'Cargo & Freight',
-      services: 'Air, Road',
-      delivery: '5–10 days',
-      rating: '4.5',
-      price: '$2,150',
-    },
-  ]
+  const fetchProviders = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/providers',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to fetch providers'
+        )
+      }
+
+      setProviders(data)
+    } catch (error) {
+      console.error(error)
+
+      setError(
+        error.message || 'Unable to load providers'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchProviders()
+  }, [])
 
   return (
-    <div>
+    <div className="p-8">
 
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">
-          Logistics Providers
-        </h1>
+      <div className="flex items-center justify-between mb-8">
 
-        <p className="mt-2 text-slate-500">
-          Select a logistics provider for your shipment.
-        </p>
-      </div>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800">
+            Logistics Providers
+          </h1>
 
-      {/* Shipment Info */}
-      <div className="mb-6 rounded-xl bg-white p-6 shadow-sm">
-        <div className="grid gap-4 md:grid-cols-4">
-
-          <div>
-            <p className="text-sm text-slate-500">
-              Shipment
-            </p>
-            <p className="mt-1 font-semibold">
-              SC-10024
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm text-slate-500">
-              Origin
-            </p>
-            <p className="mt-1 font-semibold">
-              Mumbai, India
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm text-slate-500">
-              Destination
-            </p>
-            <p className="mt-1 font-semibold">
-              Dubai, UAE
-            </p>
-          </div>
-
-          <div>
-            <p className="text-sm text-slate-500">
-              Transport
-            </p>
-            <p className="mt-1 font-semibold">
-              Air
-            </p>
-          </div>
-
+          <p className="text-slate-500 mt-1">
+            View available logistics and transportation providers
+          </p>
         </div>
+
       </div>
 
-      {/* Provider Cards */}
-      <div className="grid gap-6 lg:grid-cols-3">
 
-        {providers.map((provider) => (
-          <div
-            key={provider.id}
-            className={`rounded-xl bg-white p-6 shadow-sm transition ${
-              selectedProvider?.id === provider.id
-                ? 'ring-2 ring-blue-600'
-                : ''
-            }`}
-          >
+      {/* Error */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+          {error}
+        </div>
+      )}
 
-            <div className="mb-5 flex items-start justify-between">
 
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">
-                  {provider.name}
-                </h2>
+      {/* Loading */}
+      {loading ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+          <p className="text-slate-500">
+            Loading logistics providers...
+          </p>
+        </div>
+      ) : providers.length === 0 ? (
 
-                <p className="mt-1 text-sm text-slate-500">
-                  {provider.type}
-                </p>
-              </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
+          <p className="text-slate-500">
+            No logistics providers available.
+          </p>
+        </div>
 
-              <span className="rounded-full bg-yellow-100 px-3 py-1 text-sm font-medium text-yellow-700">
-                ★ {provider.rating}
-              </span>
+      ) : (
 
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
-            <div className="space-y-3 border-t border-slate-100 pt-4">
+          {providers.map((provider) => (
 
-              <div className="flex justify-between">
-                <span className="text-slate-500">
-                  Services
-                </span>
-
-                <span className="font-medium">
-                  {provider.services}
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-slate-500">
-                  Delivery
-                </span>
-
-                <span className="font-medium">
-                  {provider.delivery}
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-slate-500">
-                  Estimated Cost
-                </span>
-
-                <span className="text-lg font-bold text-slate-800">
-                  {provider.price}
-                </span>
-              </div>
-
-            </div>
-
-            <button
-              onClick={() => setSelectedProvider(provider)}
-              className={`mt-6 w-full rounded-lg px-4 py-3 font-medium transition ${
-                selectedProvider?.id === provider.id
-                  ? 'bg-green-600 text-white'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+            <div
+              key={provider.id}
+              className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition"
             >
-              {selectedProvider?.id === provider.id
-                ? 'Selected'
-                : 'Select Provider'}
-            </button>
 
-          </div>
-        ))}
+              {/* Provider Name */}
+              <div className="flex items-start justify-between mb-5">
 
-      </div>
+                <div className="flex items-center gap-3">
 
-      {/* Selection Confirmation */}
-      {selectedProvider && (
-        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-5">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <span className="text-blue-600 font-bold text-lg">
+                      {provider.name.charAt(0)}
+                    </span>
+                  </div>
 
-          <p className="text-green-800">
-            <span className="font-semibold">
-              Provider Selected:
-            </span>{' '}
-            {selectedProvider.name}
-          </p>
+                  <div>
+                    <h2 className="font-semibold text-slate-800">
+                      {provider.name}
+                    </h2>
 
-          <p className="mt-1 text-sm text-green-700">
-            This provider is selected for shipment SC-10024.
-          </p>
+                    <p className="text-sm text-slate-500">
+                      {provider.service_type} Transport
+                    </p>
+                  </div>
+
+                </div>
+
+                <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">
+                  {provider.status}
+                </span>
+
+              </div>
+
+
+              {/* Provider Details */}
+              <div className="space-y-3 text-sm">
+
+                <div>
+                  <p className="text-slate-400">
+                    Contact Email
+                  </p>
+
+                  <p className="text-slate-700">
+                    {provider.contact_email || 'Not available'}
+                  </p>
+                </div>
+
+
+                <div>
+                  <p className="text-slate-400">
+                    Contact Phone
+                  </p>
+
+                  <p className="text-slate-700">
+                    {provider.contact_phone || 'Not available'}
+                  </p>
+                </div>
+
+
+                <div>
+                  <p className="text-slate-400">
+                    Location
+                  </p>
+
+                  <p className="text-slate-700">
+                    {provider.origin_location || 'Not available'}
+                  </p>
+                </div>
+
+
+                <div>
+                  <p className="text-slate-400">
+                    Service Area
+                  </p>
+
+                  <p className="text-slate-700">
+                    {provider.service_area || 'Not available'}
+                  </p>
+                </div>
+
+              </div>
+
+            </div>
+
+          ))}
 
         </div>
+
       )}
 
     </div>

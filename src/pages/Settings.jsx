@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Settings() {
   const [settings, setSettings] = useState({
@@ -10,7 +10,59 @@ function Settings() {
     currency: 'USD',
   })
 
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchSettings()
+  }, [])
+
+  const fetchSettings = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/settings',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to fetch settings'
+        )
+      }
+
+      setSettings({
+        emailNotifications:
+          data.email_notifications,
+        shipmentUpdates:
+          data.shipment_updates,
+        paymentNotifications:
+          data.payment_notifications,
+        documentNotifications:
+          data.document_notifications,
+        language: data.language || 'English',
+        currency: data.currency || 'USD',
+      })
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleToggle = (name) => {
     setSettings({
@@ -19,6 +71,7 @@ function Settings() {
     })
 
     setSaved(false)
+    setError('')
   }
 
   const handleChange = (e) => {
@@ -28,10 +81,71 @@ function Settings() {
     })
 
     setSaved(false)
+    setError('')
   }
 
-  const handleSave = () => {
-    setSaved(true)
+  const handleSave = async () => {
+    try {
+      setSaving(true)
+      setSaved(false)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/settings',
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            email_notifications:
+              settings.emailNotifications,
+
+            shipment_updates:
+              settings.shipmentUpdates,
+
+            payment_notifications:
+              settings.paymentNotifications,
+
+            document_notifications:
+              settings.documentNotifications,
+
+            language: settings.language,
+
+            currency: settings.currency,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to save settings'
+        )
+      }
+
+      setSaved(true)
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-xl bg-white p-10 text-center shadow-sm">
+        <p className="text-slate-500">
+          Loading settings...
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -54,6 +168,13 @@ function Settings() {
       {saved && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
           Settings saved successfully.
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
         </div>
       )}
 
@@ -141,7 +262,9 @@ function Settings() {
 
             <button
               type="button"
-              onClick={() => handleToggle('emailNotifications')}
+              onClick={() =>
+                handleToggle('emailNotifications')
+              }
               className={`relative h-6 w-11 rounded-full transition ${
                 settings.emailNotifications
                   ? 'bg-blue-600'
@@ -174,7 +297,9 @@ function Settings() {
 
             <button
               type="button"
-              onClick={() => handleToggle('shipmentUpdates')}
+              onClick={() =>
+                handleToggle('shipmentUpdates')
+              }
               className={`relative h-6 w-11 rounded-full transition ${
                 settings.shipmentUpdates
                   ? 'bg-blue-600'
@@ -207,7 +332,9 @@ function Settings() {
 
             <button
               type="button"
-              onClick={() => handleToggle('paymentNotifications')}
+              onClick={() =>
+                handleToggle('paymentNotifications')
+              }
               className={`relative h-6 w-11 rounded-full transition ${
                 settings.paymentNotifications
                   ? 'bg-blue-600'
@@ -240,7 +367,9 @@ function Settings() {
 
             <button
               type="button"
-              onClick={() => handleToggle('documentNotifications')}
+              onClick={() =>
+                handleToggle('documentNotifications')
+              }
               className={`relative h-6 w-11 rounded-full transition ${
                 settings.documentNotifications
                   ? 'bg-blue-600'
@@ -281,13 +410,17 @@ function Settings() {
             </p>
 
             <p className="mt-1 text-sm text-slate-500">
-              Last changed recently.
+              Password changes are handled securely through your account.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() => alert('Change password feature will be connected to the backend later.')}
+            onClick={() =>
+              alert(
+                'Password change feature will be connected next.'
+              )
+            }
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
           >
             Change Password
@@ -303,9 +436,12 @@ function Settings() {
         <button
           type="button"
           onClick={handleSave}
-          className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700"
+          disabled={saving}
+          className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Save Settings
+          {saving
+            ? 'Saving...'
+            : 'Save Settings'}
         </button>
 
       </div>

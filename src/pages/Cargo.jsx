@@ -1,46 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Cargo() {
-  const [cargoItems, setCargoItems] = useState([
-    {
-      id: 1,
-      name: 'Electronic Components',
-      category: 'Electronics',
-      quantity: 120,
-      weight: '350 kg',
-      dimensions: '40 × 30 × 25 cm',
-      packageType: 'Box',
-      packages: 12,
-      value: '18500',
-      currency: 'USD',
-    },
-    {
-      id: 2,
-      name: 'Cotton Textiles',
-      category: 'Textiles',
-      quantity: 80,
-      weight: '500 kg',
-      dimensions: '60 × 40 × 30 cm',
-      packageType: 'Bale',
-      packages: 20,
-      value: '12000',
-      currency: 'USD',
-    },
-    {
-      id: 3,
-      name: 'Machine Parts',
-      category: 'Machinery',
-      quantity: 45,
-      weight: '720 kg',
-      dimensions: '80 × 50 × 45 cm',
-      packageType: 'Crate',
-      packages: 9,
-      value: '25800',
-      currency: 'USD',
-    },
-  ])
-
+  const [cargoItems, setCargoItems] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const [formData, setFormData] = useState({
     name: '',
@@ -54,6 +19,43 @@ function Cargo() {
     currency: 'USD',
   })
 
+  // Fetch cargo from backend
+  const fetchCargo = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/cargo',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch cargo')
+      }
+
+      setCargoItems(data)
+    } catch (error) {
+      console.error(error)
+      setError(error.message || 'Unable to load cargo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Load cargo when page opens
+  useEffect(() => {
+    fetchCargo()
+  }, [])
+
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -61,36 +63,102 @@ function Cargo() {
     })
   }
 
-  const handleSubmit = (e) => {
+  // Add cargo to backend
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const newCargo = {
-      id: Date.now(),
-      ...formData,
-      weight: `${formData.weight} kg`,
+    try {
+      setSaving(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/cargo',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            product_name: formData.name,
+            category: formData.category,
+            quantity: Number(formData.quantity),
+            weight: Number(formData.weight),
+            dimensions: formData.dimensions,
+            package_type: formData.packageType,
+            number_of_packages: Number(formData.packages),
+            declared_value: Number(formData.value),
+            currency: formData.currency,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add cargo')
+      }
+
+      // Add newly created cargo to the table
+      setCargoItems((currentItems) => [
+        data.cargo,
+        ...currentItems,
+      ])
+
+      // Reset form
+      setFormData({
+        name: '',
+        category: '',
+        quantity: '',
+        weight: '',
+        dimensions: '',
+        packageType: '',
+        packages: '',
+        value: '',
+        currency: 'USD',
+      })
+
+      setShowModal(false)
+    } catch (error) {
+      console.error(error)
+      setError(error.message || 'Unable to save cargo')
+    } finally {
+      setSaving(false)
     }
-
-    setCargoItems([...cargoItems, newCargo])
-
-    setFormData({
-      name: '',
-      category: '',
-      quantity: '',
-      weight: '',
-      dimensions: '',
-      packageType: '',
-      packages: '',
-      value: '',
-      currency: 'USD',
-    })
-
-    setShowModal(false)
   }
 
-  const handleDelete = (id) => {
-    setCargoItems(
-      cargoItems.filter((cargo) => cargo.id !== id)
-    )
+  // Delete cargo from backend
+  const handleDelete = async (id) => {
+    try {
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        `http://localhost:5000/api/cargo/${id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to delete cargo')
+      }
+
+      setCargoItems((currentItems) =>
+        currentItems.filter((cargo) => cargo.id !== id)
+      )
+    } catch (error) {
+      console.error(error)
+      setError(error.message || 'Unable to delete cargo')
+    }
   }
 
   return (
@@ -117,6 +185,14 @@ function Cargo() {
         </button>
 
       </div>
+
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          {error}
+        </div>
+      )}
 
 
       {/* Search and Filter */}
@@ -155,7 +231,9 @@ function Cargo() {
           </h4>
 
           <p className="text-sm text-slate-500 mt-1">
-            {cargoItems.length} cargo items found
+            {loading
+              ? 'Loading cargo...'
+              : `${cargoItems.length} cargo items found`}
           </p>
 
         </div>
@@ -204,51 +282,77 @@ function Cargo() {
 
             <tbody>
 
-              {cargoItems.map((cargo) => (
+              {loading ? (
 
-                <tr
-                  key={cargo.id}
-                  className="border-t hover:bg-slate-50"
-                >
-
-                  <td className="px-6 py-4 font-medium">
-                    {cargo.name}
+                <tr>
+                  <td
+                    colSpan="7"
+                    className="text-center py-10 text-slate-500"
+                  >
+                    Loading cargo...
                   </td>
-
-                  <td className="px-6 py-4">
-                    {cargo.category}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    {cargo.quantity}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    {cargo.weight}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    {cargo.packages}
-                  </td>
-
-                  <td className="px-6 py-4 font-medium">
-                    {cargo.currency} {cargo.value}
-                  </td>
-
-                  <td className="px-6 py-4">
-
-                    <button
-                      onClick={() => handleDelete(cargo.id)}
-                      className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-                    >
-                      Delete
-                    </button>
-
-                  </td>
-
                 </tr>
 
-              ))}
+              ) : cargoItems.length === 0 ? (
+
+                <tr>
+                  <td
+                    colSpan="7"
+                    className="text-center py-10 text-slate-500"
+                  >
+                    No cargo items found.
+                  </td>
+                </tr>
+
+              ) : (
+
+                cargoItems.map((cargo) => (
+
+                  <tr
+                    key={cargo.id}
+                    className="border-t hover:bg-slate-50"
+                  >
+
+                    <td className="px-6 py-4 font-medium">
+                      {cargo.product_name}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {cargo.category}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {cargo.quantity}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {cargo.weight} kg
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {cargo.number_of_packages}
+                    </td>
+
+                    <td className="px-6 py-4 font-medium">
+                      {cargo.currency} {cargo.declared_value}
+                    </td>
+
+                    <td className="px-6 py-4">
+
+                      <button
+                        onClick={() => handleDelete(cargo.id)}
+                        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                      >
+                        Delete
+                      </button>
+
+                    </td>
+
+                  </tr>
+
+                ))
+
+              )}
 
             </tbody>
 
@@ -506,9 +610,10 @@ function Cargo() {
 
                 <button
                   type="submit"
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
+                  disabled={saving}
+                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-60"
                 >
-                  Save Cargo
+                  {saving ? 'Saving...' : 'Save Cargo'}
                 </button>
 
               </div>

@@ -3,17 +3,56 @@ import { useState } from 'react'
 function Login({ onLogin, onBack }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState('Business User')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
+    setError('')
+
     if (!email || !password) {
-      alert('Please enter email and password.')
+      setError('Please enter email and password.')
       return
     }
 
-    onLogin(role)
+    try {
+      setLoading(true)
+
+      const response = await fetch('http://localhost:5000/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.message || 'Login failed.')
+        return
+      }
+
+      // Store authentication information
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+
+      // Send the real role returned by the backend to App.jsx
+      onLogin(data.user.role)
+
+    } catch (error) {
+      console.error(error)
+
+      setError(
+        'Unable to connect to the backend. Make sure the backend server is running.'
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -85,25 +124,6 @@ function Login({ onLogin, onBack }) {
               className="mt-8 space-y-5"
             >
 
-              {/* Role */}
-              <div>
-
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Login As
-                </label>
-
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
-                >
-                  <option>Business User</option>
-                  <option>Administrator</option>
-                  <option>Logistics Provider</option>
-                </select>
-
-              </div>
-
               {/* Email */}
               <div>
 
@@ -134,7 +154,7 @@ function Login({ onLogin, onBack }) {
                     type="button"
                     className="text-sm text-blue-600 hover:underline"
                     onClick={() =>
-                      alert('Password recovery will be connected to the backend later.')
+                      alert('Password recovery will be connected later.')
                     }
                   >
                     Forgot Password?
@@ -152,19 +172,27 @@ function Login({ onLogin, onBack }) {
 
               </div>
 
+              {/* Error Message */}
+              {error && (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
               {/* Login */}
               <button
                 type="submit"
-                className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700"
+                disabled={loading}
+                className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
               >
-                Login
+                {loading ? 'Logging in...' : 'Login'}
               </button>
 
             </form>
 
-            {/* Demo Notice */}
-            <div className="mt-6 rounded-lg bg-blue-50 p-4 text-center text-sm text-blue-700">
-              Frontend demo: any email and password can be used.
+            {/* Backend Notice */}
+            <div className="mt-6 rounded-lg bg-green-50 p-4 text-center text-sm text-green-700">
+              Connected to Smart Cargo backend
             </div>
 
           </div>

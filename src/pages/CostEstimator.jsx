@@ -1,343 +1,384 @@
 import { useState } from 'react'
 
 function CostEstimator() {
-  const [form, setForm] = useState({
-    cargo: '',
+  const [formData, setFormData] = useState({
     weight: '',
-    dimensions: '',
-    packageType: 'Carton',
-    packages: '',
+    shipping_method: '',
     origin: '',
     destination: '',
-    method: 'Air',
-    currency: 'USD',
   })
 
   const [estimate, setEstimate] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleChange = (e) => {
-    setForm({
-      ...form,
+    setFormData({
+      ...formData,
       [e.target.name]: e.target.value,
     })
+
+    setEstimate(null)
+    setError('')
   }
 
-  const calculateEstimate = () => {
-    if (
-      !form.cargo ||
-      !form.weight ||
-      !form.packages ||
-      !form.origin ||
-      !form.destination
-    ) {
-      alert('Please fill in all required fields.')
-      return
+  const calculateCost = async (e) => {
+    e.preventDefault()
+
+    try {
+      setLoading(true)
+      setError('')
+      setEstimate(null)
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/cost-estimate',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(formData),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to calculate cost'
+        )
+      }
+
+      setEstimate(data.estimate)
+
+    } catch (error) {
+      console.error(error)
+
+      setError(
+        error.message || 'Unable to calculate shipping cost'
+      )
+    } finally {
+      setLoading(false)
     }
-
-    const weight = Number(form.weight)
-    const packages = Number(form.packages)
-
-    let rate = 8
-    let delivery = '3–5 days'
-
-    if (form.method === 'Sea') {
-      rate = 3
-      delivery = '15–25 days'
-    }
-
-    if (form.method === 'Road') {
-      rate = 5
-      delivery = '7–12 days'
-    }
-
-    const baseCost = weight * rate
-    const packageCharge = packages * 15
-    const totalCost = baseCost + packageCharge
-
-    setEstimate({
-      baseCost,
-      packageCharge,
-      totalCost,
-      delivery,
-    })
   }
 
   return (
-    <div>
-      {/* Header */}
+    <div className="p-8 bg-slate-50 min-h-screen">
+
+      {/* HEADER */}
+
       <div className="mb-8">
+
         <h1 className="text-3xl font-bold text-slate-800">
           Shipping Cost Estimator
         </h1>
 
-        <p className="mt-2 text-slate-500">
-          Estimate shipping cost based on your cargo and transport details.
+        <p className="text-slate-500 mt-1">
+          Estimate your cargo shipping cost based on weight and transport method
         </p>
+
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
 
-        {/* Form */}
-        <div className="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
+      {/* ERROR */}
 
-          <h2 className="mb-6 text-xl font-semibold text-slate-800">
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+
+        {/* FORM */}
+
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
+
+          <h2 className="text-xl font-semibold text-slate-800 mb-6">
             Shipment Details
           </h2>
 
-          <div className="grid gap-5 md:grid-cols-2">
+          <form
+            onSubmit={calculateCost}
+            className="space-y-5"
+          >
 
-            {/* Cargo */}
+            {/* WEIGHT */}
+
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Cargo
-              </label>
 
-              <input
-                type="text"
-                name="cargo"
-                value={form.cargo}
-                onChange={handleChange}
-                placeholder="e.g. Electronic Components"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            {/* Weight */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Weight (kg)
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Cargo Weight (kg)
               </label>
 
               <input
                 type="number"
                 name="weight"
-                value={form.weight}
+                value={formData.weight}
                 onChange={handleChange}
-                placeholder="e.g. 350"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                min="0.01"
+                step="0.01"
+                placeholder="Enter weight"
+                required
+                className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
               />
+
             </div>
 
-            {/* Dimensions */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Dimensions
-              </label>
 
-              <input
-                type="text"
-                name="dimensions"
-                value={form.dimensions}
-                onChange={handleChange}
-                placeholder="e.g. 120 × 80 × 60 cm"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
+            {/* SHIPPING METHOD */}
 
-            {/* Package Type */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Package Type
+
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Shipping Method
               </label>
 
               <select
-                name="packageType"
-                value={form.packageType}
+                name="shipping_method"
+                value={formData.shipping_method}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                required
+                className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option>Carton</option>
-                <option>Box</option>
-                <option>Pallet</option>
-                <option>Crate</option>
-                <option>Container</option>
+
+                <option value="">
+                  Select shipping method
+                </option>
+
+                <option value="Air">
+                  Air
+                </option>
+
+                <option value="Sea">
+                  Sea
+                </option>
+
+                <option value="Road">
+                  Road
+                </option>
+
               </select>
+
             </div>
 
-            {/* Number of Packages */}
+
+            {/* ORIGIN */}
+
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Number of Packages
-              </label>
 
-              <input
-                type="number"
-                name="packages"
-                value={form.packages}
-                onChange={handleChange}
-                placeholder="e.g. 12"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            {/* Currency */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Currency
-              </label>
-
-              <select
-                name="currency"
-                value={form.currency}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-              >
-                <option>USD</option>
-                <option>EUR</option>
-                <option>GBP</option>
-                <option>INR</option>
-              </select>
-            </div>
-
-            {/* Origin */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Origin / Pickup Location
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Origin
               </label>
 
               <input
                 type="text"
                 name="origin"
-                value={form.origin}
+                value={formData.origin}
                 onChange={handleChange}
-                placeholder="e.g. Mumbai, India"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                placeholder="Mumbai, India"
+                required
+                className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
               />
+
             </div>
 
-            {/* Destination */}
+
+            {/* DESTINATION */}
+
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+
+              <label className="block text-sm font-medium text-slate-700 mb-2">
                 Destination
               </label>
 
               <input
                 type="text"
                 name="destination"
-                value={form.destination}
+                value={formData.destination}
                 onChange={handleChange}
-                placeholder="e.g. Dubai, UAE"
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                placeholder="Dubai, UAE"
+                required
+                className="w-full border border-slate-300 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
               />
+
             </div>
 
-            {/* Transport Method */}
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Transport Method
-              </label>
 
-              <div className="grid grid-cols-3 gap-3">
+            {/* BUTTON */}
 
-                {['Air', 'Sea', 'Road'].map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        method,
-                      })
-                    }
-                    className={`rounded-lg border px-4 py-3 font-medium transition ${
-                      form.method === method
-                        ? 'border-blue-600 bg-blue-600 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {method}
-                  </button>
-                ))}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white py-3 rounded-lg font-medium transition"
+            >
+              {loading
+                ? 'Calculating...'
+                : 'Calculate Shipping Cost'}
+            </button>
 
-              </div>
-            </div>
-
-          </div>
-
-          <button
-            onClick={calculateEstimate}
-            className="mt-6 rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700"
-          >
-            Calculate Estimate
-          </button>
+          </form>
 
         </div>
 
-        {/* Result */}
-        <div className="rounded-xl bg-slate-900 p-6 text-white shadow-sm">
 
-          <h2 className="mb-6 text-xl font-semibold">
-            Estimated Cost
+        {/* RESULT */}
+
+        <div className="bg-white border border-slate-200 rounded-xl p-6">
+
+          <h2 className="text-xl font-semibold text-slate-800 mb-6">
+            Cost Estimate
           </h2>
 
-          {estimate ? (
-            <div className="space-y-5">
+          {!estimate ? (
+
+            <div className="h-64 flex items-center justify-center text-center">
 
               <div>
-                <p className="text-sm text-slate-400">
-                  Total Estimated Cost
-                </p>
 
-                <p className="mt-2 text-4xl font-bold">
-                  {form.currency} {estimate.totalCost.toLocaleString()}
-                </p>
-              </div>
-
-              <div className="border-t border-slate-700 pt-4">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">
-                    Base Shipping
-                  </span>
-
-                  <span>
-                    {form.currency} {estimate.baseCost.toLocaleString()}
-                  </span>
+                <div className="text-5xl mb-4">
+                  💰
                 </div>
 
-                <div className="mt-3 flex justify-between">
-                  <span className="text-slate-400">
-                    Package Charges
-                  </span>
-
-                  <span>
-                    {form.currency} {estimate.packageCharge.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-700 pt-4">
-                <p className="text-sm text-slate-400">
-                  Estimated Delivery
+                <p className="text-slate-500">
+                  Enter shipment details and calculate the estimated cost.
                 </p>
 
-                <p className="mt-1 text-lg font-semibold">
-                  {estimate.delivery}
-                </p>
-              </div>
-
-              <div className="border-t border-slate-700 pt-4">
-                <p className="text-sm text-slate-400">
-                  Transport Method
-                </p>
-
-                <p className="mt-1 text-lg font-semibold">
-                  {form.method}
-                </p>
               </div>
 
             </div>
+
           ) : (
-            <div className="flex min-h-72 items-center justify-center text-center text-slate-400">
-              <p>
-                Enter shipment details and calculate an
-                estimated shipping cost.
-              </p>
+
+            <div className="space-y-5">
+
+              {/* TOTAL */}
+
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-center">
+
+                <p className="text-sm text-blue-600 font-medium">
+                  Estimated Shipping Cost
+                </p>
+
+                <p className="text-4xl font-bold text-blue-700 mt-2">
+                  {estimate.currency} {Number(
+                    estimate.estimated_cost
+                  ).toLocaleString()}
+                </p>
+
+              </div>
+
+
+              {/* DETAILS */}
+
+              <div className="space-y-4">
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+
+                  <span className="text-slate-500">
+                    Weight
+                  </span>
+
+                  <span className="font-medium text-slate-800">
+                    {estimate.weight} kg
+                  </span>
+
+                </div>
+
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+
+                  <span className="text-slate-500">
+                    Shipping Method
+                  </span>
+
+                  <span className="font-medium text-slate-800">
+                    {estimate.shipping_method}
+                  </span>
+
+                </div>
+
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+
+                  <span className="text-slate-500">
+                    Rate per kg
+                  </span>
+
+                  <span className="font-medium text-slate-800">
+                    {estimate.currency} {estimate.rate_per_kg}
+                  </span>
+
+                </div>
+
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+
+                  <span className="text-slate-500">
+                    Base Cost
+                  </span>
+
+                  <span className="font-medium text-slate-800">
+                    {estimate.currency} {Number(
+                      estimate.base_cost
+                    ).toLocaleString()}
+                  </span>
+
+                </div>
+
+
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+
+                  <span className="text-slate-500">
+                    Location Charge
+                  </span>
+
+                  <span className="font-medium text-slate-800">
+                    {estimate.currency} {Number(
+                      estimate.location_charge
+                    ).toLocaleString()}
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              {/* ROUTE */}
+
+              <div className="bg-slate-50 rounded-lg p-4">
+
+                <p className="text-sm text-slate-500 mb-2">
+                  Shipping Route
+                </p>
+
+                <p className="font-medium text-slate-800">
+                  {estimate.origin}
+                </p>
+
+                <p className="text-slate-400 my-1">
+                  ↓
+                </p>
+
+                <p className="font-medium text-slate-800">
+                  {estimate.destination}
+                </p>
+
+              </div>
+
             </div>
+
           )}
 
         </div>
 
       </div>
+
     </div>
   )
 }

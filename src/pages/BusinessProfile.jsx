@@ -1,19 +1,71 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function BusinessProfile() {
   const [profile, setProfile] = useState({
-    businessName: 'ABC Electronics Pvt. Ltd.',
-    ownerName: 'Rahul Sharma',
-    email: 'rahul@abcelectronics.com',
-    phone: '+91 98765 43210',
-    businessType: 'Electronics Exporter',
-    registrationNumber: 'U12345MH2026PTC001',
-    address: 'Andheri East, Mumbai',
-    city: 'Mumbai',
+    businessName: '',
+    ownerName: '',
+    email: '',
+    phone: '',
+    businessType: '',
+    registrationNumber: '',
+    address: '',
+    city: '',
     country: 'India',
   })
 
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchProfile()
+  }, [])
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/business-profile',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to fetch business profile'
+        )
+      }
+
+      setProfile({
+        businessName: data.business_name || '',
+        ownerName: data.name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        businessType: data.business_type || '',
+        registrationNumber:
+          data.registration_number || '',
+        address: data.address || '',
+        city: data.city || '',
+        country: data.country || 'India',
+      })
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleChange = (e) => {
     setProfile({
@@ -22,11 +74,67 @@ function BusinessProfile() {
     })
 
     setSaved(false)
+    setError('')
   }
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault()
-    setSaved(true)
+
+    try {
+      setSaving(true)
+      setSaved(false)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'http://localhost:5000/api/business-profile',
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            business_name: profile.businessName,
+            phone: profile.phone,
+            business_type: profile.businessType,
+            registration_number:
+              profile.registrationNumber,
+            address: profile.address,
+            city: profile.city,
+            country: profile.country,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'Failed to update business profile'
+        )
+      }
+
+      setSaved(true)
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-xl bg-white p-10 text-center shadow-sm">
+        <p className="text-slate-500">
+          Loading business profile...
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -47,6 +155,13 @@ function BusinessProfile() {
       {saved && (
         <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-green-700">
           Business profile updated successfully.
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          {error}
         </div>
       )}
 
@@ -75,6 +190,7 @@ function BusinessProfile() {
                 name="businessName"
                 value={profile.businessName}
                 onChange={handleChange}
+                placeholder="Enter business name"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               />
             </div>
@@ -88,9 +204,13 @@ function BusinessProfile() {
                 type="text"
                 name="ownerName"
                 value={profile.ownerName}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                disabled
+                className="w-full cursor-not-allowed rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-slate-600 outline-none"
               />
+
+              <p className="mt-1 text-xs text-slate-400">
+                Account name from your user profile.
+              </p>
             </div>
 
             <div>
@@ -102,9 +222,13 @@ function BusinessProfile() {
                 type="email"
                 name="email"
                 value={profile.email}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                disabled
+                className="w-full cursor-not-allowed rounded-lg border border-slate-300 bg-slate-100 px-4 py-3 text-slate-600 outline-none"
               />
+
+              <p className="mt-1 text-xs text-slate-400">
+                Email is linked to your account.
+              </p>
             </div>
 
             <div>
@@ -117,6 +241,7 @@ function BusinessProfile() {
                 name="phone"
                 value={profile.phone}
                 onChange={handleChange}
+                placeholder="Enter phone number"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               />
             </div>
@@ -132,11 +257,24 @@ function BusinessProfile() {
                 onChange={handleChange}
                 className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
               >
-                <option>Electronics Exporter</option>
-                <option>Textile Exporter</option>
-                <option>Machinery Exporter</option>
-                <option>Food Exporter</option>
-                <option>Other</option>
+                <option value="">
+                  Select business type
+                </option>
+                <option value="Electronics Exporter">
+                  Electronics Exporter
+                </option>
+                <option value="Textile Exporter">
+                  Textile Exporter
+                </option>
+                <option value="Machinery Exporter">
+                  Machinery Exporter
+                </option>
+                <option value="Food Exporter">
+                  Food Exporter
+                </option>
+                <option value="Other">
+                  Other
+                </option>
               </select>
             </div>
 
@@ -150,6 +288,7 @@ function BusinessProfile() {
                 name="registrationNumber"
                 value={profile.registrationNumber}
                 onChange={handleChange}
+                placeholder="Enter registration number"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               />
             </div>
@@ -182,6 +321,7 @@ function BusinessProfile() {
                 name="address"
                 value={profile.address}
                 onChange={handleChange}
+                placeholder="Enter business address"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               />
 
@@ -198,6 +338,7 @@ function BusinessProfile() {
                 name="city"
                 value={profile.city}
                 onChange={handleChange}
+                placeholder="Enter city"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               />
 
@@ -214,6 +355,7 @@ function BusinessProfile() {
                 name="country"
                 value={profile.country}
                 onChange={handleChange}
+                placeholder="Enter country"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               />
 
@@ -255,9 +397,12 @@ function BusinessProfile() {
 
           <button
             type="submit"
-            className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700"
+            disabled={saving}
+            className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Save Changes
+            {saving
+              ? 'Saving...'
+              : 'Save Changes'}
           </button>
 
         </div>

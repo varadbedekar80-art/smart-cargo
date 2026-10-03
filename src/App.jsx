@@ -1,5 +1,5 @@
+import { useEffect, useState } from 'react'
 import CostEstimator from './pages/CostEstimator'
-import { useState } from 'react'
 import Cargo from './pages/Cargo'
 import Shipments from './pages/Shipments'
 import Providers from './pages/Providers'
@@ -11,12 +11,14 @@ import Notifications from './pages/Notifications'
 import Reports from './pages/Reports'
 import BusinessProfile from './pages/BusinessProfile'
 import Settings from './pages/Settings'
+
 import Home from './pages/Home'
 import Login from './pages/Login'
 import About from './pages/About'
 import Services from './pages/Services'
 import HowItWorks from './pages/HowItWorks'
 import Contact from './pages/Contact'
+
 import AdminDashboard from './pages/admin/AdminDashboard'
 import Users from './pages/admin/Users'
 import Businesses from './pages/admin/Businesses'
@@ -25,67 +27,110 @@ import AdminDocuments from './pages/admin/Documents'
 import AdminPayments from './pages/admin/Payments'
 import AdminProviders from './pages/admin/Providers'
 import AdminSettings from './pages/admin/Settings'
+
 import ProviderDashboard from './pages/provider/Dashboard'
 import AssignedShipments from './pages/provider/AssignedShipments'
 import UpdateShipmentStatus from './pages/provider/UpdateShipmentStatus'
+
+
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [userRole, setUserRole] = useState('')
+
+  const [isLoggedIn, setIsLoggedIn] = useState(
+    !!localStorage.getItem('token')
+  )
+
+  const [userRole, setUserRole] = useState(() => {
+    const savedUser = localStorage.getItem('user')
+
+    if (savedUser) {
+      try {
+        return JSON.parse(savedUser).role || 'Business User'
+      } catch {
+        return 'Business User'
+      }
+    }
+
+    return 'Business User'
+  })
+
   const [showLogin, setShowLogin] = useState(false)
+
   const [publicPage, setPublicPage] = useState('Home')
+
   const [activePage, setActivePage] = useState('Dashboard')
 
-  const handleLogin = (role) => {
-  setUserRole(role)
-  setIsLoggedIn(true)
-  setShowLogin(false)
-}
 
-const handleLogout = () => {
-  setIsLoggedIn(false)
-  setUserRole('')
-}
+  const handleLogin = (role) => {
+    setUserRole(role)
+    setIsLoggedIn(true)
+    setShowLogin(false)
+    setActivePage('Dashboard')
+  }
+
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+
+    setIsLoggedIn(false)
+    setShowLogin(false)
+    setUserRole('Business User')
+    setActivePage('Dashboard')
+  }
+
 
   const userMenuItems = [
-  'Dashboard',
-  'Cargo',
-  'Shipments',
-  'Cost Estimator',
-  'Logistics Providers',
-  'Documents',
-  'Payments',
-  'Invoices',
-  'Tracking',
-  'Reports',
-  'Notifications',
-  'Business Profile',
-  'Settings',
-]
+    'Dashboard',
+    'Cargo',
+    'Shipments',
+    'Cost Estimator',
+    'Logistics Providers',
+    'Documents',
+    'Payments',
+    'Invoices',
+    'Tracking',
+    'Reports',
+    'Notifications',
+    'Business Profile',
+    'Settings',
+  ]
 
-const adminMenuItems = [
-  'Dashboard',
-  'Users',
-  'Businesses',
-  'Shipments',
-  'Documents',
-  'Payments',
-  'Logistics Providers',
-  'Settings',
-]
 
-const providerMenuItems = [
-  'Dashboard',
-  'Assigned Shipments',
-  'Update Shipment Status',
-]
-const menuItems =
-  userRole === 'Administrator'
-    ? adminMenuItems
-    : userRole === 'Logistics Provider'
-      ? providerMenuItems
-      : userMenuItems
+  const adminMenuItems = [
+    'Dashboard',
+    'Users',
+    'Businesses',
+    'Shipments',
+    'Documents',
+    'Payments',
+    'Logistics Providers',
+    'Settings',
+  ]
+
+
+  const providerMenuItems = [
+    'Dashboard',
+    'Assigned Shipments',
+    'Update Shipment Status',
+  ]
+
+
+  const menuItems =
+    userRole === 'Administrator'
+      ? adminMenuItems
+      : userRole === 'Logistics Provider'
+        ? providerMenuItems
+        : userMenuItems
+
+
+  /*
+  ==========================================
+  PUBLIC WEBSITE
+  ==========================================
+  */
 
   if (!isLoggedIn) {
+
     if (showLogin) {
       return (
         <Login
@@ -95,72 +140,93 @@ const menuItems =
       )
     }
 
-      if (publicPage === 'About') {
+
+    if (publicPage === 'About') {
+      return (
+        <About
+          onLogin={() => setShowLogin(true)}
+          onRegister={() => setShowLogin(true)}
+          onNavigate={setPublicPage}
+        />
+      )
+    }
+
+
+    if (publicPage === 'Services') {
+      return (
+        <Services
+          onLogin={() => setShowLogin(true)}
+          onRegister={() => setShowLogin(true)}
+          onNavigate={setPublicPage}
+        />
+      )
+    }
+
+
+    if (publicPage === 'How It Works') {
+      return (
+        <HowItWorks
+          onLogin={() => setShowLogin(true)}
+          onRegister={() => setShowLogin(true)}
+          onNavigate={setPublicPage}
+        />
+      )
+    }
+
+
+    if (publicPage === 'Contact') {
+      return (
+        <Contact
+          onLogin={() => setShowLogin(true)}
+          onRegister={() => setShowLogin(true)}
+          onNavigate={setPublicPage}
+        />
+      )
+    }
+
+
     return (
-      <About
-       onLogin={() => setShowLogin(true)}
-     onRegister={() => setShowLogin(true)}
-    onNavigate={setPublicPage}
-  />
+      <Home
+        onLogin={() => setShowLogin(true)}
+        onRegister={() => setShowLogin(true)}
+        onNavigate={setPublicPage}
+      />
     )
   }
 
-  if (publicPage === 'Services') {
-    return (
-      <Services
-    onLogin={() => setShowLogin(true)}
-    onRegister={() => setShowLogin(true)}
-    onNavigate={setPublicPage}
-/>
-    )
-  }
 
-  if (publicPage === 'How It Works') {
-    return (
-      <HowItWorks
-   onLogin={() => setShowLogin(true)}
-   onRegister={() => setShowLogin(true)}
-   onNavigate={setPublicPage}
-/>
-    )
-  }
-
-  if (publicPage === 'Contact') {
-    return (
-    <Contact
-    onLogin={() => setShowLogin(true)}
-   onRegister={() => setShowLogin(true)}
-   onNavigate={setPublicPage}
-/>
-    )
-  }
-   return (
-    <Home
-  onLogin={() => setShowLogin(true)}
-  onRegister={() => setShowLogin(true)}
-  onNavigate={setPublicPage}
-  />
-  )
-
-    
-  }
+  /*
+  ==========================================
+  LOGGED-IN APPLICATION
+  ==========================================
+  */
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800">
 
-      {/* Sidebar */}
-<aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white p-5 overflow-y-auto">
 
-  {/* Sidebar Logo */}
-  <div className="flex items-center justify-center border-b border-slate-700 pb-5 mb-5">
-    <img
-      src="/cargo-logo.png"
-      alt="Smart Cargo"
-      className="h-20 w-auto object-contain"
-    />
-  </div>
+      {/* ==========================================
+          SIDEBAR
+      ========================================== */}
+
+      <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white p-5 overflow-y-auto">
+
+
+        {/* Sidebar Logo */}
+
+        <div className="flex items-center justify-center border-b border-slate-700 pb-5 mb-5">
+
+          <img
+            src="/cargo-logo.png"
+            alt="Smart Cargo"
+            className="h-20 w-auto object-contain"
+          />
+
+        </div>
+
 
         <div className="mb-8">
+
           <h1 className="text-2xl font-bold">
             Smart Cargo
           </h1>
@@ -168,11 +234,16 @@ const menuItems =
           <p className="text-sm text-slate-400 mt-1">
             Export & Logistics
           </p>
+
         </div>
+
+
+        {/* Sidebar Navigation */}
 
         <nav className="space-y-1">
 
           {menuItems.map((item) => (
+
             <button
               key={item}
               onClick={() => setActivePage(item)}
@@ -184,6 +255,7 @@ const menuItems =
             >
               {item}
             </button>
+
           ))}
 
         </nav>
@@ -191,13 +263,21 @@ const menuItems =
       </aside>
 
 
-      {/* Main Content */}
+      {/* ==========================================
+          MAIN CONTENT
+      ========================================== */}
+
       <main className="ml-64 min-h-screen">
 
-        {/* Top Bar */}
+
+        {/* ==========================================
+            TOP BAR
+        ========================================== */}
+
         <header className="bg-white border-b px-8 py-5 flex justify-between items-center sticky top-0 z-10">
 
           <div>
+
             <h2 className="text-2xl font-bold">
               {activePage}
             </h2>
@@ -205,15 +285,20 @@ const menuItems =
             <p className="text-sm text-slate-500 mt-1">
               Smart Cargo Export & Logistics Management System
             </p>
+
           </div>
 
+
           <div className="flex items-center gap-4">
+
 
             <button className="text-xl">
               🔔
             </button>
 
+
             <div className="text-right">
+
               <p className="font-semibold">
                 {userRole}
               </p>
@@ -221,96 +306,211 @@ const menuItems =
               <p className="text-xs text-slate-500">
                 Export Company
               </p>
+
             </div>
 
+
             <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+
               {userRole === 'Administrator'
-            ? 'AD'
-           : userRole === 'Logistics Provider'
-           ? 'LP'
-           : 'BU'}
+                ? 'AD'
+                : userRole === 'Logistics Provider'
+                  ? 'LP'
+                  : 'BU'}
+
             </div>
-         <button
-          onClick={handleLogout}
-          className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-          >
-          Logout
-      </button>
+
+
+            <button
+              onClick={handleLogout}
+              className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+            >
+              Logout
+            </button>
 
           </div>
 
         </header>
 
 
-        {/* Page Content */}
+        {/* ==========================================
+            PAGE CONTENT
+        ========================================== */}
+
         <section className="p-8">
 
+
+          {/* DASHBOARD */}
+
           {activePage === 'Dashboard' && (
-         userRole === 'Administrator'
-         ? <AdminDashboard />
-          : userRole === 'Logistics Provider'
-          ? <ProviderDashboard />
-          : <Dashboard />
-)}
-        {activePage === 'Users' && userRole === 'Administrator' && (
-         <Users />
-        )}
-        {activePage === 'Businesses' && userRole === 'Administrator' && (
-          <Businesses />
-        )}
+
+            userRole === 'Administrator'
+
+              ? <AdminDashboard />
+
+              : userRole === 'Logistics Provider'
+
+                ? <ProviderDashboard />
+
+                : <Dashboard />
+
+          )}
+
+
+          {/* ADMIN USERS */}
+
+          {activePage === 'Users' &&
+            userRole === 'Administrator' && (
+              <Users />
+            )}
+
+
+          {/* ADMIN BUSINESSES */}
+
+          {activePage === 'Businesses' &&
+            userRole === 'Administrator' && (
+              <Businesses />
+            )}
+
+
+          {/* CARGO */}
 
           {activePage === 'Cargo' && (
             <Cargo />
           )}
 
+
+          {/* SHIPMENTS */}
+
           {activePage === 'Shipments' && (
-           userRole === 'Administrator'
-           ? <AdminShipments />
-           : <Shipments />
-        )}
-        {activePage === 'Assigned Shipments' && (
-       userRole === 'Logistics Provider'
-        ? <AssignedShipments />
-       : null
-        )}
-        {activePage === 'Update Shipment Status' && (
-        userRole === 'Logistics Provider'
-        ? <UpdateShipmentStatus />
-       : null
-      )}
 
-          {activePage === 'Cost Estimator' && <CostEstimator />}
+            userRole === 'Administrator'
+
+              ? <AdminShipments />
+
+              : <Shipments />
+
+          )}
+
+
+          {/* PROVIDER ASSIGNED SHIPMENTS */}
+
+          {activePage === 'Assigned Shipments' && (
+
+            userRole === 'Logistics Provider'
+
+              ? <AssignedShipments />
+
+              : null
+
+          )}
+
+
+          {/* PROVIDER UPDATE STATUS */}
+
+          {activePage === 'Update Shipment Status' && (
+
+            userRole === 'Logistics Provider'
+
+              ? <UpdateShipmentStatus />
+
+              : null
+
+          )}
+
+
+          {/* COST ESTIMATOR */}
+
+          {activePage === 'Cost Estimator' && (
+            <CostEstimator />
+          )}
+
+
+          {/* LOGISTICS PROVIDERS */}
+
           {activePage === 'Logistics Providers' && (
-           userRole === 'Administrator'
-          ? <AdminProviders />
-          : <Providers />
-        )}
+
+            userRole === 'Administrator'
+
+              ? <AdminProviders />
+
+              : <Providers />
+
+          )}
+
+
+          {/* DOCUMENTS */}
+
           {activePage === 'Documents' && (
-          userRole === 'Administrator'
-         ? <AdminDocuments />
-          : <Documents />
-        )}
+
+            userRole === 'Administrator'
+
+              ? <AdminDocuments />
+
+              : <Documents />
+
+          )}
+
+
+          {/* PAYMENTS */}
+
           {activePage === 'Payments' && (
-         userRole === 'Administrator'
-         ? <AdminPayments />
-         : <Payments />
-        )}
 
-          {activePage === 'Invoices' && <Invoices />}
+            userRole === 'Administrator'
 
-          {activePage === 'Tracking' && <Tracking />}
+              ? <AdminPayments />
 
-          {activePage === 'Reports' && <Reports />}
+              : <Payments />
 
-          {activePage === 'Notifications' && <Notifications />}
+          )}
 
-          {activePage === 'Business Profile' && <BusinessProfile />}
+
+          {/* INVOICES */}
+
+          {activePage === 'Invoices' && (
+            <Invoices />
+          )}
+
+
+          {/* TRACKING */}
+
+          {activePage === 'Tracking' && (
+            <Tracking />
+          )}
+
+
+          {/* REPORTS */}
+
+          {activePage === 'Reports' && (
+            <Reports />
+          )}
+
+
+          {/* NOTIFICATIONS */}
+
+          {activePage === 'Notifications' && (
+            <Notifications />
+          )}
+
+
+          {/* BUSINESS PROFILE */}
+
+          {activePage === 'Business Profile' && (
+            <BusinessProfile />
+          )}
+
+
+          {/* SETTINGS */}
 
           {activePage === 'Settings' && (
-          userRole === 'Administrator'
-         ? <AdminSettings />
-          : <Settings />
-        )}
+
+            userRole === 'Administrator'
+
+              ? <AdminSettings />
+
+              : <Settings />
+
+          )}
 
         </section>
 
@@ -321,13 +521,133 @@ const menuItems =
 }
 
 
-/* Dashboard */
+/*
+==========================================
+BUSINESS USER DASHBOARD
+==========================================
+*/
 
 function Dashboard() {
+
+  const [shipments, setShipments] = useState([])
+
+  const [loading, setLoading] = useState(true)
+
+  const [error, setError] = useState('')
+
+
+  /*
+  ==========================================
+  FETCH SHIPMENTS
+  ==========================================
+  */
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+
+  const fetchDashboardData = async () => {
+
+    try {
+
+      setLoading(true)
+
+      setError('')
+
+
+      const token = localStorage.getItem('token')
+
+
+      const response = await fetch(
+        'http://localhost:5000/api/shipments',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+
+      const data = await response.json()
+
+
+      if (!response.ok) {
+
+        throw new Error(
+          data.message ||
+          'Failed to fetch dashboard data'
+        )
+
+      }
+
+
+      setShipments(data)
+
+    } catch (error) {
+
+      console.error(error)
+
+      setError(error.message)
+
+    } finally {
+
+      setLoading(false)
+
+    }
+
+  }
+
+
+  /*
+  ==========================================
+  CALCULATE STATISTICS
+  ==========================================
+  */
+
+  const activeShipments = shipments.filter(
+    (shipment) =>
+      shipment.status === 'In Transit' ||
+      shipment.status === 'Picked Up'
+  ).length
+
+
+  const pendingShipments = shipments.filter(
+    (shipment) =>
+      shipment.status === 'Pending'
+  ).length
+
+
+  const completedShipments = shipments.filter(
+    (shipment) =>
+      shipment.status === 'Completed' ||
+      shipment.status === 'Delivered'
+  ).length
+
+
+  /*
+  ==========================================
+  RECENT SHIPMENTS
+  ==========================================
+  */
+
+  const recentShipments = [...shipments]
+    .sort(
+      (a, b) =>
+        new Date(b.created_at) -
+        new Date(a.created_at)
+    )
+    .slice(0, 5)
+
+
   return (
     <div>
 
-      {/* Welcome */}
+
+      {/* ==========================================
+          WELCOME SECTION
+      ========================================== */}
+
       <div className="bg-blue-600 text-white rounded-2xl p-6 mb-8">
 
         <h3 className="text-2xl font-bold mb-2">
@@ -342,38 +662,80 @@ function Dashboard() {
       </div>
 
 
-      {/* Summary Cards */}
+      {/* ==========================================
+          ERROR MESSAGE
+      ========================================== */}
+
+      {error && (
+
+        <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-red-700">
+
+          {error}
+
+        </div>
+
+      )}
+
+
+      {/* ==========================================
+          SUMMARY CARDS
+      ========================================== */}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+
 
         <StatCard
           title="Total Shipments"
-          value="24"
+          value={
+            loading
+              ? '...'
+              : shipments.length
+          }
           description="All shipments"
         />
 
+
         <StatCard
           title="Active Shipments"
-          value="8"
+          value={
+            loading
+              ? '...'
+              : activeShipments
+          }
           description="Currently in transit"
         />
 
+
         <StatCard
           title="Pending"
-          value="5"
+          value={
+            loading
+              ? '...'
+              : pendingShipments
+          }
           description="Awaiting action"
         />
 
+
         <StatCard
           title="Completed"
-          value="11"
+          value={
+            loading
+              ? '...'
+              : completedShipments
+          }
           description="Successfully delivered"
         />
 
       </div>
 
 
-      {/* Recent Shipments */}
+      {/* ==========================================
+          RECENT SHIPMENTS
+      ========================================== */}
+
       <div className="bg-white rounded-xl shadow-sm">
+
 
         <div className="p-6 border-b">
 
@@ -388,63 +750,75 @@ function Dashboard() {
         </div>
 
 
-        <div className="overflow-x-auto">
+        {loading ? (
 
-          <table className="w-full">
+          <div className="p-8 text-center text-slate-500">
 
-            <thead className="bg-slate-50">
+            Loading shipments...
 
-              <tr>
+          </div>
 
-                <th className="text-left px-6 py-4 text-sm">
-                  Tracking ID
-                </th>
+        ) : recentShipments.length === 0 ? (
 
-                <th className="text-left px-6 py-4 text-sm">
-                  Destination
-                </th>
+          <div className="p-8 text-center text-slate-500">
 
-                <th className="text-left px-6 py-4 text-sm">
-                  Method
-                </th>
+            No shipments found.
 
-                <th className="text-left px-6 py-4 text-sm">
-                  Status
-                </th>
+          </div>
 
-              </tr>
+        ) : (
 
-            </thead>
+          <div className="overflow-x-auto">
+
+            <table className="w-full">
 
 
-            <tbody>
+              <thead className="bg-slate-50">
 
-              <ShipmentRow
-                id="SC-10024"
-                destination="Dubai, UAE"
-                method="Air"
-                status="In Transit"
-              />
+                <tr>
 
-              <ShipmentRow
-                id="SC-10023"
-                destination="Singapore"
-                method="Sea"
-                status="Pending"
-              />
+                  <th className="text-left px-6 py-4 text-sm">
+                    Shipment ID
+                  </th>
 
-              <ShipmentRow
-                id="SC-10022"
-                destination="London, UK"
-                method="Air"
-                status="Completed"
-              />
+                  <th className="text-left px-6 py-4 text-sm">
+                    Destination
+                  </th>
 
-            </tbody>
+                  <th className="text-left px-6 py-4 text-sm">
+                    Method
+                  </th>
 
-          </table>
+                  <th className="text-left px-6 py-4 text-sm">
+                    Status
+                  </th>
 
-        </div>
+                </tr>
+
+              </thead>
+
+
+              <tbody>
+
+                {recentShipments.map((shipment) => (
+
+                  <ShipmentRow
+                    key={shipment.id}
+                    id={shipment.shipment_number}
+                    destination={shipment.destination}
+                    method={shipment.shipping_method}
+                    status={shipment.status}
+                  />
+
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        )}
 
       </div>
 
@@ -453,10 +827,20 @@ function Dashboard() {
 }
 
 
-/* Statistic Card */
+/*
+==========================================
+STATISTIC CARD
+==========================================
+*/
 
-function StatCard({ title, value, description }) {
+function StatCard({
+  title,
+  value,
+  description
+}) {
+
   return (
+
     <div className="bg-white rounded-xl p-6 shadow-sm">
 
       <p className="text-sm text-slate-500">
@@ -472,14 +856,26 @@ function StatCard({ title, value, description }) {
       </p>
 
     </div>
+
   )
 }
 
 
-/* Shipment Row */
+/*
+==========================================
+SHIPMENT ROW
+==========================================
+*/
 
-function ShipmentRow({ id, destination, method, status }) {
+function ShipmentRow({
+  id,
+  destination,
+  method,
+  status
+}) {
+
   return (
+
     <tr className="border-t">
 
       <td className="px-6 py-4 font-medium">
@@ -496,21 +892,42 @@ function ShipmentRow({ id, destination, method, status }) {
 
       <td className="px-6 py-4">
 
-        <span className="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-700">
+        <span
+          className={`px-3 py-1 rounded-full text-xs ${
+            status === 'Completed' ||
+            status === 'Delivered'
+              ? 'bg-green-100 text-green-700'
+              : status === 'Pending'
+                ? 'bg-yellow-100 text-yellow-700'
+                : status === 'Cancelled'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-blue-100 text-blue-700'
+          }`}
+        >
           {status}
         </span>
 
       </td>
 
     </tr>
+
   )
 }
 
 
-/* Temporary Page */
+/*
+==========================================
+TEMPORARY PAGE
+==========================================
+*/
 
-function SimplePage({ title, description }) {
+function SimplePage({
+  title,
+  description
+}) {
+
   return (
+
     <div className="bg-white rounded-xl p-8 shadow-sm">
 
       <h3 className="text-2xl font-bold mb-2">
@@ -530,7 +947,9 @@ function SimplePage({ title, description }) {
       </div>
 
     </div>
+
   )
 }
+
 
 export default App
