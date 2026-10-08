@@ -2392,6 +2392,140 @@ app.delete('/api/admin/providers/:id', authMiddleware, async (req, res) => {
   }
 })
 
+
+app.get('/api/admin/settings', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const result = await pool.query(
+      `SELECT
+        id,
+        email_notifications,
+        shipment_updates,
+        payment_notifications,
+        document_notifications,
+        language,
+        currency
+       FROM user_settings
+       WHERE user_id = $1`,
+      [req.user.id]
+    )
+
+    if (result.rows.length === 0) {
+      const newSettings = await pool.query(
+        `INSERT INTO user_settings (
+          user_id,
+          email_notifications,
+          shipment_updates,
+          payment_notifications,
+          document_notifications,
+          language,
+          currency
+        )
+        VALUES ($1, TRUE, TRUE, TRUE, TRUE, 'English', 'USD')
+        RETURNING
+          id,
+          email_notifications,
+          shipment_updates,
+          payment_notifications,
+          document_notifications,
+          language,
+          currency`,
+        [req.user.id]
+      )
+
+      return res.status(200).json(newSettings.rows[0])
+    }
+
+    return res.status(200).json(result.rows[0])
+
+  } catch (error) {
+    console.error('GET ADMIN SETTINGS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to fetch admin settings'
+    })
+  }
+})
+
+
+app.put('/api/admin/settings', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const {
+      email_notifications,
+      shipment_updates,
+      payment_notifications,
+      document_notifications,
+      language,
+      currency
+    } = req.body
+
+    const result = await pool.query(
+      `INSERT INTO user_settings (
+        user_id,
+        email_notifications,
+        shipment_updates,
+        payment_notifications,
+        document_notifications,
+        language,
+        currency,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        email_notifications = EXCLUDED.email_notifications,
+        shipment_updates = EXCLUDED.shipment_updates,
+        payment_notifications = EXCLUDED.payment_notifications,
+        document_notifications = EXCLUDED.document_notifications,
+        language = EXCLUDED.language,
+        currency = EXCLUDED.currency,
+        updated_at = CURRENT_TIMESTAMP
+
+      RETURNING
+        id,
+        email_notifications,
+        shipment_updates,
+        payment_notifications,
+        document_notifications,
+        language,
+        currency`,
+      [
+        req.user.id,
+        email_notifications ?? true,
+        shipment_updates ?? true,
+        payment_notifications ?? true,
+        document_notifications ?? true,
+        language || 'English',
+        currency || 'USD'
+      ]
+    )
+
+    return res.status(200).json({
+      message: 'Admin settings updated successfully',
+      settings: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('UPDATE ADMIN SETTINGS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to update admin settings'
+    })
+  }
+})
+
 // ==============================
 // START SERVER
 // ==============================
