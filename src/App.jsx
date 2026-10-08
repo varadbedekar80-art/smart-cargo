@@ -12,7 +12,7 @@ import Notifications from './pages/Notifications'
 import Reports from './pages/Reports'
 import BusinessProfile from './pages/BusinessProfile'
 import Settings from './pages/Settings'
-
+import ProviderProfile from './pages/provider/Profile'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -118,6 +118,7 @@ function App() {
     'Dashboard',
     'Assigned Shipments',
     'Update Shipment Status',
+    'Profile',
   ]
 
 
@@ -387,7 +388,6 @@ function App() {
 
           <div className="flex items-center gap-4">
 
-
             <button className="text-xl">
               🔔
             </button>
@@ -471,9 +471,10 @@ function App() {
 
           {/* CARGO */}
 
-          {activePage === 'Cargo' && (
-            <Cargo />
-          )}
+          {activePage === 'Cargo' &&
+            userRole === 'Business User' && (
+              <Cargo />
+            )}
 
 
           {/* SHIPMENTS */}
@@ -484,7 +485,9 @@ function App() {
 
               ? <AdminShipments />
 
-              : <Shipments />
+              : userRole === 'Business User'
+                ? <Shipments />
+                : null
 
           )}
 
@@ -515,11 +518,25 @@ function App() {
           )}
 
 
+          {/* PROVIDER PROFILE */}
+
+          {activePage === 'Profile' && (
+
+            userRole === 'Logistics Provider'
+
+              ? <ProviderProfile />
+
+              : null
+
+          )}
+
+
           {/* COST ESTIMATOR */}
 
-          {activePage === 'Cost Estimator' && (
-            <CostEstimator />
-          )}
+          {activePage === 'Cost Estimator' &&
+            userRole === 'Business User' && (
+              <CostEstimator />
+            )}
 
 
           {/* LOGISTICS PROVIDERS */}
@@ -530,7 +547,9 @@ function App() {
 
               ? <AdminProviders />
 
-              : <Providers />
+              : userRole === 'Business User'
+                ? <Providers />
+                : null
 
           )}
 
@@ -543,7 +562,9 @@ function App() {
 
               ? <AdminDocuments />
 
-              : <Documents />
+              : userRole === 'Business User'
+                ? <Documents />
+                : null
 
           )}
 
@@ -556,44 +577,51 @@ function App() {
 
               ? <AdminPayments />
 
-              : <Payments />
+              : userRole === 'Business User'
+                ? <Payments />
+                : null
 
           )}
 
 
           {/* INVOICES */}
 
-          {activePage === 'Invoices' && (
-            <Invoices />
-          )}
+          {activePage === 'Invoices' &&
+            userRole === 'Business User' && (
+              <Invoices />
+            )}
 
 
           {/* TRACKING */}
 
-          {activePage === 'Tracking' && (
-            <Tracking />
-          )}
+          {activePage === 'Tracking' &&
+            userRole === 'Business User' && (
+              <Tracking />
+            )}
 
 
           {/* REPORTS */}
 
-          {activePage === 'Reports' && (
-            <Reports />
-          )}
+          {activePage === 'Reports' &&
+            userRole === 'Business User' && (
+              <Reports />
+            )}
 
 
           {/* NOTIFICATIONS */}
 
-          {activePage === 'Notifications' && (
-            <Notifications />
-          )}
+          {activePage === 'Notifications' &&
+            userRole === 'Business User' && (
+              <Notifications />
+            )}
 
 
           {/* BUSINESS PROFILE */}
 
-          {activePage === 'Business Profile' && (
-            <BusinessProfile />
-          )}
+          {activePage === 'Business Profile' &&
+            userRole === 'Business User' && (
+              <BusinessProfile />
+            )}
 
 
           {/* SETTINGS */}
@@ -604,7 +632,9 @@ function App() {
 
               ? <AdminSettings />
 
-              : <Settings />
+              : userRole === 'Business User'
+                ? <Settings />
+                : null
 
           )}
 
