@@ -1,229 +1,337 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Payments() {
-  const [payments, setPayments] = useState([
-    {
-      id: 1,
-      transaction: 'TXN-50021',
-      shipment: 'SC-10024',
-      business: 'ABC Electronics Pvt. Ltd.',
-      amount: '$2,450',
-      method: 'Card',
-      date: '28 Sep 2026',
-      status: 'Paid',
-    },
-    {
-      id: 2,
-      transaction: 'TXN-50020',
-      shipment: 'SC-10023',
-      business: 'Cotton Exporters Ltd.',
-      amount: '$1,850',
-      method: 'UPI',
-      date: '27 Sep 2026',
-      status: 'Pending',
-    },
-    {
-      id: 3,
-      transaction: 'TXN-50019',
-      shipment: 'SC-10022',
-      business: 'Industrial Parts Co.',
-      amount: '$3,200',
-      method: 'Bank Transfer',
-      date: '25 Sep 2026',
-      status: 'Paid',
-    },
-    {
-      id: 4,
-      transaction: 'TXN-50018',
-      shipment: 'SC-10021',
-      business: 'Metro Auto Exports',
-      amount: '$2,780',
-      method: 'Card',
-      date: '24 Sep 2026',
-      status: 'Failed',
-    },
-  ])
+  const [payments, setPayments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const updateStatus = (id, newStatus) => {
-    setPayments(
-      payments.map((payment) =>
-        payment.id === id
-          ? { ...payment, status: newStatus }
-          : payment
+  const token = localStorage.getItem('token')
+
+  const fetchPayments = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const response = await fetch(
+        'https://smart-cargo.onrender.com/api/admin/payments',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       )
-    )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to load payments')
+      }
+
+      setPayments(data)
+    } catch (error) {
+      console.error('ADMIN PAYMENTS ERROR:', error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
+  useEffect(() => {
+    fetchPayments()
+  }, [])
+
+  const updateStatus = async (paymentId, status) => {
+    try {
+      const response = await fetch(
+        `https://smart-cargo.onrender.com/api/admin/payments/${paymentId}/status`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update payment status')
+      }
+
+      setPayments((currentPayments) =>
+        currentPayments.map((payment) =>
+          payment.id === paymentId
+            ? { ...payment, status }
+            : payment
+        )
+      )
+    } catch (error) {
+      console.error('UPDATE PAYMENT STATUS ERROR:', error)
+      alert(error.message)
+    }
+  }
+
+  const completedCount = payments.filter(
+    (payment) => payment.status === 'Completed'
+  ).length
+
+  const pendingCount = payments.filter(
+    (payment) => payment.status === 'Pending'
+  ).length
+
+  const failedCount = payments.filter(
+    (payment) => payment.status === 'Failed'
+  ).length
+
+  const totalCompletedAmount = payments
+    .filter((payment) => payment.status === 'Completed')
+    .reduce(
+      (total, payment) => total + Number(payment.amount || 0),
+      0
+    )
+
   const getStatusStyle = (status) => {
-    if (status === 'Paid') {
+    if (status === 'Completed') {
       return 'bg-green-100 text-green-700'
     }
 
-    if (status === 'Pending') {
-      return 'bg-yellow-100 text-yellow-700'
+    if (status === 'Failed') {
+      return 'bg-red-100 text-red-700'
     }
 
-    return 'bg-red-100 text-red-700'
+    if (status === 'Refunded') {
+      return 'bg-purple-100 text-purple-700'
+    }
+
+    return 'bg-yellow-100 text-yellow-700'
   }
 
   return (
-    <div>
-      {/* Header */}
+    <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">
+        <h1 className="text-3xl font-bold text-gray-800">
           Payment Management
         </h1>
 
-        <p className="mt-2 text-slate-500">
-          Monitor and manage payment transactions across the platform.
+        <p className="mt-2 text-gray-500">
+          Monitor and manage payments across the platform.
         </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="mb-6 grid gap-5 md:grid-cols-3">
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Total Transactions
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4 mb-8">
+        <div className="rounded-xl bg-white p-6 shadow-sm border">
+          <p className="text-sm text-gray-500">
+            Total Payments
           </p>
-          <p className="mt-2 text-3xl font-bold text-slate-800">
+
+          <h2 className="mt-2 text-3xl font-bold text-gray-800">
             {payments.length}
-          </p>
+          </h2>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Successful Payments
+        <div className="rounded-xl bg-white p-6 shadow-sm border">
+          <p className="text-sm text-gray-500">
+            Completed
           </p>
-          <p className="mt-2 text-3xl font-bold text-green-600">
-            {
-              payments.filter(
-                (payment) => payment.status === 'Paid'
-              ).length
-            }
-          </p>
+
+          <h2 className="mt-2 text-3xl font-bold text-green-600">
+            {completedCount}
+          </h2>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Pending Payments
+        <div className="rounded-xl bg-white p-6 shadow-sm border">
+          <p className="text-sm text-gray-500">
+            Pending
           </p>
-          <p className="mt-2 text-3xl font-bold text-yellow-600">
-            {
-              payments.filter(
-                (payment) => payment.status === 'Pending'
-              ).length
-            }
+
+          <h2 className="mt-2 text-3xl font-bold text-yellow-600">
+            {pendingCount}
+          </h2>
+        </div>
+
+        <div className="rounded-xl bg-white p-6 shadow-sm border">
+          <p className="text-sm text-gray-500">
+            Completed Amount
+          </p>
+
+          <h2 className="mt-2 text-3xl font-bold text-blue-600">
+            ${totalCompletedAmount.toFixed(2)}
+          </h2>
+
+          <p className="text-xs text-gray-400 mt-1">
+            Failed: {failedCount}
           </p>
         </div>
       </div>
 
-      {/* Payments Table */}
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-        <div className="border-b px-6 py-5">
-          <h2 className="text-xl font-semibold text-slate-800">
-            All Payment Transactions
+      <div className="rounded-xl bg-white shadow-sm border overflow-hidden">
+        <div className="p-6 border-b">
+          <h2 className="text-xl font-semibold text-gray-800">
+            All Payments
           </h2>
+
+          <p className="text-sm text-gray-500 mt-1">
+            View and manage payments made by business users.
+          </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Transaction ID
-                </th>
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">
+            Loading payments...
+          </div>
+        ) : error ? (
+          <div className="p-8 text-center">
+            <p className="text-red-600 font-medium">
+              {error}
+            </p>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Shipment
-                </th>
+            <button
+              onClick={fetchPayments}
+              className="mt-4 rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+            >
+              Retry
+            </button>
+          </div>
+        ) : payments.length === 0 ? (
+          <div className="p-10 text-center text-gray-500">
+            No payments found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Payment Reference
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Business
-                </th>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Business / Owner
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Amount
-                </th>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Shipment
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Method
-                </th>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Amount
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Date
-                </th>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Method
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Status
-                </th>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Status
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Action
-                </th>
-              </tr>
-            </thead>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Date
+                  </th>
 
-            <tbody className="divide-y">
-              {payments.map((payment) => (
-                <tr
-                  key={payment.id}
-                  className="hover:bg-slate-50"
-                >
-                  <td className="px-6 py-4 font-medium text-blue-600">
-                    {payment.transaction}
-                  </td>
-
-                  <td className="px-6 py-4 font-medium text-slate-700">
-                    {payment.shipment}
-                  </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {payment.business}
-                  </td>
-
-                  <td className="px-6 py-4 font-medium text-slate-700">
-                    {payment.amount}
-                  </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {payment.method}
-                  </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {payment.date}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
-                        payment.status
-                      )}`}
-                    >
-                      {payment.status}
-                    </span>
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <select
-                      value={payment.status}
-                      onChange={(e) =>
-                        updateStatus(
-                          payment.id,
-                          e.target.value
-                        )
-                      }
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                    >
-                      <option>Pending</option>
-                      <option>Paid</option>
-                      <option>Failed</option>
-                    </select>
-                  </td>
+                  <th className="px-6 py-4 text-left font-semibold text-gray-600">
+                    Action
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+
+              <tbody className="divide-y">
+                {payments.map((payment) => (
+                  <tr
+                    key={payment.id}
+                    className="hover:bg-gray-50"
+                  >
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-gray-800">
+                        {payment.payment_reference}
+                      </p>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <p className="font-medium text-gray-800">
+                        {payment.business_name ||
+                          'No business profile'}
+                      </p>
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        Owner: {payment.owner_name}
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        {payment.owner_email}
+                      </p>
+                    </td>
+
+                    <td className="px-6 py-4 font-medium text-gray-700">
+                      {payment.shipment_number ||
+                        'Not Assigned'}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-gray-800">
+                        {payment.currency || 'USD'}{' '}
+                        {Number(payment.amount || 0).toFixed(2)}
+                      </p>
+                    </td>
+
+                    <td className="px-6 py-4 text-gray-600">
+                      {payment.payment_method}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusStyle(
+                          payment.status
+                        )}`}
+                      >
+                        {payment.status}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4 text-gray-600">
+                      {payment.payment_date
+                        ? new Date(
+                            payment.payment_date
+                          ).toLocaleDateString()
+                        : 'Not Available'}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <select
+                        value={payment.status}
+                        onChange={(event) =>
+                          updateStatus(
+                            payment.id,
+                            event.target.value
+                          )
+                        }
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      >
+                        <option value="Pending">
+                          Pending
+                        </option>
+
+                        <option value="Completed">
+                          Completed
+                        </option>
+
+                        <option value="Failed">
+                          Failed
+                        </option>
+
+                        <option value="Refunded">
+                          Refunded
+                        </option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )

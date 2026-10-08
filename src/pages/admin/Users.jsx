@@ -1,50 +1,118 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Users() {
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      name: 'Rahul Sharma',
-      email: 'rahul@abcelectronics.com',
-      role: 'Business User',
-      status: 'Active',
-    },
-    {
-      id: 2,
-      name: 'Priya Mehta',
-      email: 'priya@textileexports.com',
-      role: 'Business User',
-      status: 'Active',
-    },
-    {
-      id: 3,
-      name: 'Amit Patel',
-      email: 'amit@swiftcargo.com',
-      role: 'Logistics Provider',
-      status: 'Active',
-    },
-    {
-      id: 4,
-      name: 'Sneha Kulkarni',
-      email: 'sneha@machinelogistics.com',
-      role: 'Business User',
-      status: 'Inactive',
-    },
-  ])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const toggleStatus = (id) => {
-    setUsers(
-      users.map((user) =>
-        user.id === id
-          ? {
-              ...user,
-              status:
-                user.status === 'Active'
-                  ? 'Inactive'
-                  : 'Active',
-            }
-          : user
+  const token = localStorage.getItem('token')
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch(
+          'https://smart-cargo.onrender.com/api/users',
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        )
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch users')
+        }
+
+        setUsers(Array.isArray(data) ? data : [])
+      } catch (error) {
+        console.error('GET USERS ERROR:', error)
+        setError(error.message || 'Failed to load users')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUsers()
+  }, [token])
+
+  const toggleStatus = async (user) => {
+  const newStatus =
+    user.status === 'Active'
+      ? 'Inactive'
+      : 'Active'
+
+  try {
+    const response = await fetch(
+      `https://smart-cargo.onrender.com/api/users/${user.id}/status`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      }
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        data.message || 'Failed to update user status'
       )
+    }
+
+    setUsers((currentUsers) =>
+      currentUsers.map((currentUser) =>
+        currentUser.id === user.id
+          ? {
+              ...currentUser,
+              status: data.user.status,
+            }
+          : currentUser
+      )
+    )
+
+  } catch (error) {
+    console.error('UPDATE USER STATUS ERROR:', error)
+
+    alert(error.message || 'Failed to update user status')
+  }
+}
+
+  const activeUsers = users.filter(
+    (user) => user.status === 'Active'
+  ).length
+
+  const inactiveUsers = users.filter(
+    (user) => user.status === 'Inactive'
+  ).length
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="text-slate-500">
+          Loading users...
+        </p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl bg-white p-8 shadow-sm">
+        <h1 className="text-2xl font-bold text-red-600">
+          Failed to load users
+        </h1>
+
+        <p className="mt-2 text-slate-500">
+          {error}
+        </p>
+      </div>
     )
   }
 
@@ -80,9 +148,7 @@ function Users() {
           </p>
 
           <p className="mt-2 text-3xl font-bold text-green-600">
-            {users.filter(
-              (user) => user.status === 'Active'
-            ).length}
+            {activeUsers}
           </p>
         </div>
 
@@ -92,9 +158,7 @@ function Users() {
           </p>
 
           <p className="mt-2 text-3xl font-bold text-red-600">
-            {users.filter(
-              (user) => user.status === 'Inactive'
-            ).length}
+            {inactiveUsers}
           </p>
         </div>
 
@@ -141,53 +205,66 @@ function Users() {
 
             <tbody className="divide-y">
 
-              {users.map((user) => (
-                <tr
-                  key={user.id}
-                  className="hover:bg-slate-50"
-                >
-
-                  <td className="px-6 py-4 font-medium text-slate-800">
-                    {user.name}
+              {users.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-10 text-center text-slate-500"
+                  >
+                    No users found.
                   </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {user.email}
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-                      {user.role}
-                    </span>
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        user.status === 'Active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {user.status}
-                    </span>
-                  </td>
-
-                  <td className="px-6 py-4">
-
-                    <button
-                      onClick={() => toggleStatus(user.id)}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    >
-                      {user.status === 'Active'
-                        ? 'Deactivate'
-                        : 'Activate'}
-                    </button>
-
-                  </td>
-
                 </tr>
-              ))}
+              ) : (
+                users.map((user) => (
+                  <tr
+                    key={user.id}
+                    className="hover:bg-slate-50"
+                  >
+
+                    <td className="px-6 py-4 font-medium text-slate-800">
+                      {user.name}
+                    </td>
+
+                    <td className="px-6 py-4 text-slate-600">
+                      {user.email}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                        {user.role}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          user.status === 'Active'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {user.status}
+                      </span>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <button
+  onClick={() => toggleStatus(user)}
+  className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+    user.status === 'Active'
+      ? 'border-red-300 text-red-600 hover:bg-red-50'
+      : 'border-green-300 text-green-600 hover:bg-green-50'
+  }`}
+>
+  {user.status === 'Active'
+    ? 'Deactivate'
+    : 'Activate'}
+</button>
+                    </td>
+
+                  </tr>
+                ))
+              )}
 
             </tbody>
 

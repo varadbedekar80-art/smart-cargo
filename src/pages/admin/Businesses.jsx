@@ -1,204 +1,248 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Businesses() {
-  const [businesses, setBusinesses] = useState([
-    {
-      id: 1,
-      name: 'ABC Electronics Pvt. Ltd.',
-      owner: 'Rahul Sharma',
-      email: 'rahul@abcelectronics.com',
-      type: 'Electronics Exporter',
-      status: 'Active',
-    },
-    {
-      id: 2,
-      name: 'Cotton Exporters Ltd.',
-      owner: 'Priya Mehta',
-      email: 'priya@textileexports.com',
-      type: 'Textile Exporter',
-      status: 'Active',
-    },
-    {
-      id: 3,
-      name: 'Industrial Parts Co.',
-      owner: 'Sneha Kulkarni',
-      email: 'sneha@machinelogistics.com',
-      type: 'Machinery Exporter',
-      status: 'Inactive',
-    },
-  ])
+  const [businesses, setBusinesses] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const toggleStatus = (id) => {
-    setBusinesses(
-      businesses.map((business) =>
-        business.id === id
-          ? {
-              ...business,
-              status:
-                business.status === 'Active'
-                  ? 'Inactive'
-                  : 'Active',
-            }
-          : business
+  const token = localStorage.getItem('token')
+
+  const fetchBusinesses = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const response = await fetch(
+        'https://smart-cargo.onrender.com/api/admin/businesses',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       )
-    )
+
+      const contentType = response.headers.get('content-type') || ''
+
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          'Server returned an invalid response. Please try again after deployment.'
+        )
+      }
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to load businesses'
+        )
+      }
+
+      setBusinesses(data)
+
+    } catch (error) {
+      console.error('GET BUSINESSES ERROR:', error)
+
+      setError(
+        error.message || 'Failed to load businesses'
+      )
+
+    } finally {
+      setLoading(false)
+    }
   }
 
+  useEffect(() => {
+    fetchBusinesses()
+  }, [])
+
+  const activeBusinesses = businesses.filter(
+    (business) => business.status === 'Active'
+  ).length
+
+  const inactiveBusinesses = businesses.filter(
+    (business) => business.status === 'Inactive'
+  ).length
+
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">
-          Business Management
+    <div className="p-6">
+
+      {/* PAGE HEADER */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          Businesses
         </h1>
 
-        <p className="mt-2 text-slate-500">
-          View and manage registered businesses.
+        <p className="mt-1 text-sm text-gray-500">
+          Manage registered business profiles and their owners.
         </p>
       </div>
 
-      {/* Summary */}
-      <div className="mb-6 grid gap-5 md:grid-cols-3">
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
+      {/* SUMMARY CARDS */}
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
             Total Businesses
           </p>
 
-          <p className="mt-2 text-3xl font-bold text-slate-800">
+          <p className="mt-2 text-3xl font-bold text-gray-900">
             {businesses.length}
           </p>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
             Active Businesses
           </p>
 
           <p className="mt-2 text-3xl font-bold text-green-600">
-            {businesses.filter(
-              (business) => business.status === 'Active'
-            ).length}
+            {activeBusinesses}
           </p>
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
+
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">
             Inactive Businesses
           </p>
 
           <p className="mt-2 text-3xl font-bold text-red-600">
-            {businesses.filter(
-              (business) => business.status === 'Inactive'
-            ).length}
+            {inactiveBusinesses}
           </p>
         </div>
 
       </div>
 
-      {/* Businesses Table */}
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
 
-        <div className="border-b px-6 py-5">
-          <h2 className="text-xl font-semibold text-slate-800">
+      {/* ERROR */}
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+
+      {/* TABLE */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+
+        <div className="border-b border-gray-200 px-6 py-4">
+          <h2 className="font-semibold text-gray-900">
             Registered Businesses
           </h2>
         </div>
 
-        <div className="overflow-x-auto">
 
-          <table className="w-full">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">
+            Loading businesses...
+          </div>
+        ) : businesses.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            No business profiles found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
 
-            <thead className="bg-slate-50">
-              <tr>
+            <table className="min-w-full">
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Business
-                </th>
+              <thead className="bg-gray-50">
+                <tr>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Owner
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Business
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Email
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Owner
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Business Type
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Business Type
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Status
-                </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Location
+                  </th>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Action
-                </th>
-
-              </tr>
-            </thead>
-
-            <tbody className="divide-y">
-
-              {businesses.map((business) => (
-                <tr
-                  key={business.id}
-                  className="hover:bg-slate-50"
-                >
-
-                  <td className="px-6 py-4 font-medium text-slate-800">
-                    {business.name}
-                  </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {business.owner}
-                  </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {business.email}
-                  </td>
-
-                  <td className="px-6 py-4 text-slate-600">
-                    {business.type}
-                  </td>
-
-                  <td className="px-6 py-4">
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${
-                        business.status === 'Active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {business.status}
-                    </span>
-
-                  </td>
-
-                  <td className="px-6 py-4">
-
-                    <button
-                      onClick={() => toggleStatus(business.id)}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    >
-                      {business.status === 'Active'
-                        ? 'Deactivate'
-                        : 'Activate'}
-                    </button>
-
-                  </td>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Status
+                  </th>
 
                 </tr>
-              ))}
+              </thead>
 
-            </tbody>
 
-          </table>
+              <tbody className="divide-y divide-gray-200">
 
-        </div>
+                {businesses.map((business) => (
+                  <tr
+                    key={business.id}
+                    className="hover:bg-gray-50"
+                  >
+
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-gray-900">
+                        {business.business_name || 'Not provided'}
+                      </div>
+
+                      <div className="text-sm text-gray-500">
+                        {business.registration_number || 'No registration number'}
+                      </div>
+                    </td>
+
+
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-gray-900">
+                        {business.owner_name}
+                      </div>
+
+                      <div className="text-sm text-gray-500">
+                        {business.owner_email}
+                      </div>
+                    </td>
+
+
+                    <td className="px-6 py-4 text-sm text-gray-700">
+                      {business.business_type || 'Not provided'}
+                    </td>
+
+
+                    <td className="px-6 py-4 text-sm text-gray-700">
+                      {business.city || 'Not provided'}
+                      {business.country
+                        ? `, ${business.country}`
+                        : ''}
+                    </td>
+
+
+                    <td className="px-6 py-4">
+
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                          business.status === 'Active'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {business.status}
+                      </span>
+
+                    </td>
+
+                  </tr>
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+        )}
+
       </div>
+
     </div>
   )
 }

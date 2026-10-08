@@ -2178,6 +2178,220 @@ app.put('/api/admin/payments/:id/status', authMiddleware, async (req, res) => {
   }
 })
 
+app.get('/api/admin/providers', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const result = await pool.query(
+      `SELECT *
+       FROM providers
+       ORDER BY id DESC`
+    )
+
+    res.status(200).json(result.rows)
+
+  } catch (error) {
+    console.error('GET ADMIN PROVIDERS ERROR:', error)
+
+    res.status(500).json({
+      message: 'Failed to fetch providers'
+    })
+  }
+})
+
+
+app.post('/api/admin/providers', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const {
+      name,
+      service_type,
+      contact_email,
+      phone,
+      location,
+      coverage
+    } = req.body
+
+    if (
+      !name ||
+      !service_type ||
+      !contact_email ||
+      !phone ||
+      !location ||
+      !coverage
+    ) {
+      return res.status(400).json({
+        message: 'All provider fields are required'
+      })
+    }
+
+    const result = await pool.query(
+      `INSERT INTO providers (
+        name,
+        service_type,
+        contact_email,
+        phone,
+        location,
+        coverage,
+        status
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'Active')
+      RETURNING *`,
+      [
+        name,
+        service_type,
+        contact_email,
+        phone,
+        location,
+        coverage
+      ]
+    )
+
+    res.status(201).json({
+      message: 'Provider created successfully',
+      provider: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('CREATE ADMIN PROVIDER ERROR:', error)
+
+    res.status(500).json({
+      message: 'Failed to create provider'
+    })
+  }
+})
+
+
+app.put('/api/admin/providers/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const providerId = req.params.id
+
+    const {
+      name,
+      service_type,
+      contact_email,
+      phone,
+      location,
+      coverage,
+      status
+    } = req.body
+
+    if (
+      !name ||
+      !service_type ||
+      !contact_email ||
+      !phone ||
+      !location ||
+      !coverage
+    ) {
+      return res.status(400).json({
+        message: 'All provider fields are required'
+      })
+    }
+
+    if (!['Active', 'Inactive'].includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid provider status'
+      })
+    }
+
+    const result = await pool.query(
+      `UPDATE providers
+       SET
+         name = $1,
+         service_type = $2,
+         contact_email = $3,
+         phone = $4,
+         location = $5,
+         coverage = $6,
+         status = $7
+       WHERE id = $8
+       RETURNING *`,
+      [
+        name,
+        service_type,
+        contact_email,
+        phone,
+        location,
+        coverage,
+        status,
+        providerId
+      ]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Provider not found'
+      })
+    }
+
+    res.status(200).json({
+      message: 'Provider updated successfully',
+      provider: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('UPDATE ADMIN PROVIDER ERROR:', error)
+
+    res.status(500).json({
+      message: 'Failed to update provider'
+    })
+  }
+})
+
+
+app.delete('/api/admin/providers/:id', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const providerId = req.params.id
+
+    const result = await pool.query(
+      `DELETE FROM providers
+       WHERE id = $1
+       RETURNING *`,
+      [providerId]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Provider not found'
+      })
+    }
+
+    res.status(200).json({
+      message: 'Provider deleted successfully',
+      provider: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('DELETE ADMIN PROVIDER ERROR:', error)
+
+    res.status(500).json({
+      message: 'Failed to delete provider'
+    })
+  }
+})
+
 // ==============================
 // START SERVER
 // ==============================
