@@ -2072,6 +2072,112 @@ app.put('/api/admin/documents/:id/status', authMiddleware, async (req, res) => {
   }
 })
 
+app.get('/api/admin/payments', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const result = await pool.query(
+      `SELECT
+        p.id,
+        p.payment_reference,
+        p.amount,
+        p.currency,
+        p.payment_method,
+        p.status,
+        p.payment_date,
+
+        s.shipment_number,
+
+        u.name AS owner_name,
+        u.email AS owner_email,
+
+        bp.business_name
+
+       FROM payments p
+
+       LEFT JOIN shipments s
+         ON p.shipment_id = s.id
+
+       INNER JOIN users u
+         ON p.user_id = u.id
+
+       LEFT JOIN business_profiles bp
+         ON p.user_id = bp.user_id
+
+       ORDER BY p.id DESC`
+    )
+
+    return res.status(200).json(result.rows)
+
+  } catch (error) {
+    console.error('GET ADMIN PAYMENTS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to fetch admin payments'
+    })
+  }
+})
+
+
+app.put('/api/admin/payments/:id/status', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const paymentId = req.params.id
+    const { status } = req.body
+
+    const allowedStatuses = [
+      'Pending',
+      'Completed',
+      'Failed',
+      'Refunded'
+    ]
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid payment status'
+      })
+    }
+
+    const result = await pool.query(
+      `UPDATE payments
+       SET status = $1
+       WHERE id = $2
+       RETURNING *`,
+      [
+        status,
+        paymentId
+      ]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Payment not found'
+      })
+    }
+
+    return res.status(200).json({
+      message: 'Payment status updated successfully',
+      payment: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('UPDATE ADMIN PAYMENT STATUS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to update payment status'
+    })
+  }
+})
+
 // ==============================
 // START SERVER
 // ==============================
