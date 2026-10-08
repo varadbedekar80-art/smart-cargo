@@ -193,11 +193,7 @@ function Login({ onLogin, onBack, onRegister }) {
 
             </form>
 
-            {/* Backend Notice */}
-            <div className="mt-6 rounded-lg bg-green-50 p-4 text-center text-sm text-green-700">
-              Connected to Smart Cargo backend
-            </div>
-
+            
           </div>
 
           {/* Register */}
