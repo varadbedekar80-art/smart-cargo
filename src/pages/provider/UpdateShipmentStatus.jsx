@@ -30,13 +30,22 @@ function UpdateShipmentStatus() {
       const token = localStorage.getItem('token')
 
       const response = await fetch(
-        'https://smart-cargo.onrender.com/api/provider/shipments/${selectedShipment}/status',
+        'https://smart-cargo.onrender.com/api/provider/shipments',
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       )
+
+      const contentType =
+        response.headers.get('content-type') || ''
+
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          'Server returned an invalid response. Please try again after deployment.'
+        )
+      }
 
       const data = await response.json()
 
@@ -49,8 +58,15 @@ function UpdateShipmentStatus() {
       setShipments(data)
 
     } catch (error) {
-      console.error(error)
-      setError(error.message)
+      console.error(
+        'GET PROVIDER SHIPMENTS ERROR:',
+        error
+      )
+
+      setError(
+        error.message || 'Failed to fetch shipments'
+      )
+
     } finally {
       setLoading(false)
     }
@@ -64,7 +80,8 @@ function UpdateShipmentStatus() {
     setError('')
 
     const shipment = shipments.find(
-      (item) => String(item.id) === String(shipmentId)
+      (item) =>
+        String(item.id) === String(shipmentId)
     )
 
     if (shipment) {
@@ -107,11 +124,21 @@ function UpdateShipmentStatus() {
         }
       )
 
+      const contentType =
+        response.headers.get('content-type') || ''
+
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          'Server returned an invalid response. Please try again after deployment.'
+        )
+      }
+
       const data = await response.json()
 
       if (!response.ok) {
         throw new Error(
-          data.message || 'Failed to update shipment status'
+          data.message ||
+          'Failed to update shipment status'
         )
       }
 
@@ -122,8 +149,16 @@ function UpdateShipmentStatus() {
       await fetchShipments()
 
     } catch (error) {
-      console.error(error)
-      setError(error.message)
+      console.error(
+        'UPDATE PROVIDER SHIPMENT STATUS ERROR:',
+        error
+      )
+
+      setError(
+        error.message ||
+        'Failed to update shipment status'
+      )
+
     } finally {
       setUpdating(false)
     }
