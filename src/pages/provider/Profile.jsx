@@ -11,6 +11,9 @@ function Profile() {
 
   const fetchProfile = async () => {
     try {
+      setLoading(true)
+      setError('')
+
       const token = localStorage.getItem('token')
 
       const response = await fetch(
@@ -21,14 +24,6 @@ function Profile() {
           }
         }
       )
-
-      const contentType = response.headers.get('content-type') || ''
-
-      if (!contentType.includes('application/json')) {
-        throw new Error(
-          'Server returned an invalid response. Please try again.'
-        )
-      }
 
       const data = await response.json()
 
@@ -90,7 +85,10 @@ function Profile() {
   return (
     <div className="p-8">
 
+      {/* Page Header */}
+
       <div className="mb-8">
+
         <h1 className="text-3xl font-bold text-gray-800">
           Provider Profile
         </h1>
@@ -98,9 +96,14 @@ function Profile() {
         <p className="text-gray-500 mt-1">
           View your logistics provider account information.
         </p>
+
       </div>
 
+
+      {/* Profile Layout */}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
 
         {/* Profile Summary */}
 
@@ -109,20 +112,25 @@ function Profile() {
           <div className="flex flex-col items-center text-center">
 
             <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-4">
+
               <span className="text-3xl font-bold text-blue-600">
                 {profile.name
                   ? profile.name.charAt(0).toUpperCase()
                   : 'P'}
               </span>
+
             </div>
+
 
             <h2 className="text-xl font-bold text-gray-800">
               {profile.name}
             </h2>
 
+
             <p className="text-gray-500 mt-1">
               {profile.service_type}
             </p>
+
 
             <span
               className={`mt-4 px-4 py-1.5 rounded-full text-sm font-medium ${
@@ -147,66 +155,97 @@ function Profile() {
             Provider Information
           </h2>
 
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
+
+            {/* Provider Name */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
                 Provider Name
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.name}
+                {profile.name || 'Not available'}
               </p>
+
             </div>
 
+
+            {/* Service Type */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
                 Service Type
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.service_type}
+                {profile.service_type || 'Not available'}
               </p>
+
             </div>
 
+
+            {/* Contact Email */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
                 Contact Email
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.contact_email}
+                {profile.contact_email || 'Not available'}
               </p>
+
             </div>
 
+
+            {/* Contact Phone */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
-                Phone
+                Contact Phone
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.phone}
+                {profile.contact_phone || 'Not available'}
               </p>
+
             </div>
 
+
+            {/* Origin Location */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
-                Location
+                Origin Location
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.location}
+                {profile.origin_location || 'Not available'}
               </p>
+
             </div>
 
+
+            {/* Service Area */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
-                Coverage
+                Service Area
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.coverage}
+                {profile.service_area || 'Not available'}
               </p>
+
             </div>
 
           </div>
@@ -222,26 +261,37 @@ function Profile() {
             Account Information
           </h2>
 
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
+
+            {/* Account Name */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
                 Account Name
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.account_name}
+                {profile.account_name || 'Not available'}
               </p>
+
             </div>
 
+
+            {/* Account Email */}
+
             <div>
+
               <p className="text-sm text-gray-500 mb-1">
                 Account Email
               </p>
 
               <p className="font-medium text-gray-800">
-                {profile.account_email}
+                {profile.account_email || 'Not available'}
               </p>
+
             </div>
 
           </div>
@@ -255,3 +305,4 @@ function Profile() {
 }
 
 export default Profile
+

@@ -1,194 +1,54 @@
 const express = require('express')
-const dotenv = require('dotenv')
 const cors = require('cors')
+const bcrypt = require('bcrypt')
+const jwt = require('jsonwebtoken')
+const dotenv = require('dotenv')
+
+const pool = require('./db')
+const authMiddleware = require('./middleware/authMiddleware')
 
 dotenv.config()
 
-const pool = require('./db')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
-const authMiddleware = require('./middleware/authMiddleware')
-
 const app = express()
-const PORT = process.env.PORT || 5000
-const JWT_SECRET = process.env.JWT_SECRET
 
 app.use(cors())
 app.use(express.json())
 
+const PORT = process.env.PORT || 5000
+const JWT_SECRET = process.env.JWT_SECRET
 
-// ==============================
-// HOME ROUTE
-// ==============================
+
+// =====================================================
+// BASIC ROUTES
+// =====================================================
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Smart Cargo Backend API is running!'
+    message: 'Smart Cargo Backend is running'
   })
 })
 
 
-// ==============================
-// DATABASE HEALTH CHECK
-// ==============================
-
-app.get('/api/health', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()')
-
-    res.json({
-      status: 'OK',
-      message: 'Backend and PostgreSQL are connected',
-      databaseTime: result.rows[0].now
-    })
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      status: 'ERROR',
-      message: 'Database connection failed'
-    })
-  }
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    message: 'Smart Cargo API is healthy'
+  })
 })
 
 
-// ==============================
-// GET ALL USERS
-// ==============================
-
-app.get('/api/users', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
-      })
-    }
-
-    const result = await pool.query(
-      `SELECT id, name, email, role, status, created_at
-       FROM users
-       ORDER BY id DESC`
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-    console.error('GET USERS ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to fetch users'
-    })
-  }
-})
-
-
-// ==============================
-// UPDATE USER STATUS
-// ==============================
-
-app.put('/api/users/:id/status', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
-      })
-    }
-
-    const userId = req.params.id
-    const { status } = req.body
-
-    if (!['Active', 'Inactive'].includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid status'
-      })
-    }
-
-    if (String(userId) === String(req.user.id)) {
-      return res.status(400).json({
-        message: 'You cannot change your own account status'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE users
-       SET status = $1
-       WHERE id = $2
-       RETURNING id, name, email, role, status`,
-      [status, userId]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'User not found'
-      })
-    }
-
-    res.json({
-      message: 'User status updated successfully',
-      user: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE USER STATUS ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to update user status'
-    })
-  }
-})
-
-
-// ==============================
-// ADMIN BUSINESS MANAGEMENT
-// ==============================
-
-app.get('/api/admin/businesses', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
-      })
-    }
-
-    const result = await pool.query(
-      `SELECT
-        bp.id,
-        bp.user_id,
-        bp.business_name,
-        bp.phone,
-        bp.business_type,
-        bp.registration_number,
-        bp.address,
-        bp.city,
-        bp.country,
-        u.name AS owner_name,
-        u.email AS owner_email,
-        u.status
-       FROM business_profiles bp
-       INNER JOIN users u
-         ON bp.user_id = u.id
-       ORDER BY bp.id DESC`
-    )
-
-    return res.status(200).json(result.rows)
-
-  } catch (error) {
-    console.error('GET ADMIN BUSINESSES ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to fetch businesses'
-    })
-  }
-})
-
-
-// ==============================
-// REGISTER USER
-// ==============================
+// =====================================================
+// REGISTER
+// =====================================================
 
 app.post('/api/register', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body
+    const {
+      name,
+      email,
+      password,
+      role = 'Business User'
+    } = req.body
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -196,35 +56,48 @@ app.post('/api/register', async (req, res) => {
       })
     }
 
-    const userRole = role || 'Business User'
-
     const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1',
       [email]
     )
 
     if (existingUser.rows.length > 0) {
-      return res.status(409).json({
-        message: 'User with this email already exists'
+      return res.status(400).json({
+        message: 'Email already registered'
       })
     }
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
     const result = await pool.query(
-      `INSERT INTO users (name, email, password, role)
+      `INSERT INTO users
+       (name, email, password, role)
        VALUES ($1, $2, $3, $4)
        RETURNING id, name, email, role, status, created_at`,
-      [name, email, hashedPassword, userRole]
+      [
+        name,
+        email,
+        hashedPassword,
+        role
+      ]
+    )
+
+    const user = result.rows[0]
+
+    await pool.query(
+      `INSERT INTO user_settings (user_id)
+       VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [user.id]
     )
 
     res.status(201).json({
-      message: 'User registered successfully',
-      user: result.rows[0]
+      message: 'Registration successful',
+      user
     })
 
   } catch (error) {
-    console.error(error)
+    console.error('REGISTER ERROR:', error)
 
     res.status(500).json({
       message: 'Registration failed'
@@ -233,13 +106,16 @@ app.post('/api/register', async (req, res) => {
 })
 
 
-// ==============================
-// LOGIN USER
-// ==============================
+// =====================================================
+// LOGIN
+// =====================================================
 
 app.post('/api/login', async (req, res) => {
   try {
-    const { email, password } = req.body
+    const {
+      email,
+      password
+    } = req.body
 
     if (!email || !password) {
       return res.status(400).json({
@@ -248,7 +124,9 @@ app.post('/api/login', async (req, res) => {
     }
 
     const result = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
+      `SELECT *
+       FROM users
+       WHERE email = $1`,
       [email]
     )
 
@@ -259,6 +137,12 @@ app.post('/api/login', async (req, res) => {
     }
 
     const user = result.rows[0]
+
+    if (user.status !== 'Active') {
+      return res.status(403).json({
+        message: 'Your account is inactive'
+      })
+    }
 
     const passwordMatch = await bcrypt.compare(
       password,
@@ -271,21 +155,16 @@ app.post('/api/login', async (req, res) => {
       })
     }
 
-    if (user.status !== 'Active') {
-      return res.status(403).json({
-        message: 'Your account is inactive'
-      })
-    }
-
     const token = jwt.sign(
       {
         id: user.id,
+        name: user.name,
         email: user.email,
         role: user.role
       },
       JWT_SECRET,
       {
-        expiresIn: '1d'
+        expiresIn: '7d'
       }
     )
 
@@ -302,7 +181,7 @@ app.post('/api/login', async (req, res) => {
     })
 
   } catch (error) {
-    console.error(error)
+    console.error('LOGIN ERROR:', error)
 
     res.status(500).json({
       message: 'Login failed'
@@ -311,228 +190,192 @@ app.post('/api/login', async (req, res) => {
 })
 
 
-// ==============================
-// GET CURRENT AUTHENTICATED USER
-// ==============================
+// =====================================================
+// CURRENT USER
+// =====================================================
 
-app.get('/api/me', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT id, name, email, role, status, created_at
-       FROM users
-       WHERE id = $1`,
-      [req.user.id]
-    )
+app.get(
+  '/api/me',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT id, name, email, role, status, created_at
+         FROM users
+         WHERE id = $1`,
+        [req.user.id]
+      )
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'User not found'
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'User not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('ME ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch user'
       })
     }
-
-    res.json({
-      message: 'Authenticated user',
-      user: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to fetch user'
-    })
   }
-})
+)
 
 
-// ==============================
+// =====================================================
 // USER SETTINGS
-// ==============================
+// =====================================================
 
-// GET USER SETTINGS
+app.get(
+  '/api/settings',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT *
+         FROM user_settings
+         WHERE user_id = $1`,
+        [req.user.id]
+      )
 
-app.get('/api/settings', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
+      if (result.rows.length === 0) {
+        const created = await pool.query(
+          `INSERT INTO user_settings (user_id)
+           VALUES ($1)
+           RETURNING *`,
+          [req.user.id]
+        )
+
+        return res.json(created.rows[0])
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('GET SETTINGS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch settings'
+      })
+    }
+  }
+)
+
+
+app.put(
+  '/api/settings',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
         email_notifications,
         shipment_updates,
         payment_notifications,
         document_notifications,
         language,
         currency
-       FROM user_settings
-       WHERE user_id = $1`,
-      [req.user.id]
-    )
+      } = req.body
 
-    if (result.rows.length === 0) {
-      const defaultResult = await pool.query(
-        `INSERT INTO user_settings (
+      const result = await pool.query(
+        `INSERT INTO user_settings
+        (
           user_id,
           email_notifications,
           shipment_updates,
           payment_notifications,
           document_notifications,
           language,
-          currency
+          currency,
+          updated_at
         )
-        VALUES ($1, TRUE, TRUE, TRUE, TRUE, 'English', 'USD')
-        RETURNING
-          email_notifications,
-          shipment_updates,
-          payment_notifications,
-          document_notifications,
-          language,
-          currency`,
+        VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          email_notifications = EXCLUDED.email_notifications,
+          shipment_updates = EXCLUDED.shipment_updates,
+          payment_notifications = EXCLUDED.payment_notifications,
+          document_notifications = EXCLUDED.document_notifications,
+          language = EXCLUDED.language,
+          currency = EXCLUDED.currency,
+          updated_at = CURRENT_TIMESTAMP
+
+        RETURNING *`,
+        [
+          req.user.id,
+          email_notifications ?? true,
+          shipment_updates ?? true,
+          payment_notifications ?? true,
+          document_notifications ?? true,
+          language || 'English',
+          currency || 'USD'
+        ]
+      )
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE SETTINGS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update settings'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// BUSINESS PROFILE
+// =====================================================
+
+app.get(
+  '/api/business-profile',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT *
+         FROM business_profiles
+         WHERE user_id = $1`,
         [req.user.id]
       )
 
-      return res.json(defaultResult.rows[0])
-    }
+      if (result.rows.length === 0) {
+        return res.json({
+          user_id: req.user.id,
+          business_name: '',
+          phone: '',
+          business_type: '',
+          registration_number: '',
+          address: '',
+          city: '',
+          country: 'India'
+        })
+      }
 
-    res.json(result.rows[0])
+      res.json(result.rows[0])
 
-  } catch (error) {
-    console.error('GET Settings Error:', error)
+    } catch (error) {
+      console.error('GET BUSINESS PROFILE ERROR:', error)
 
-    res.status(500).json({
-      message: 'Failed to fetch settings'
-    })
-  }
-})
-
-
-// UPDATE USER SETTINGS
-
-app.put('/api/settings', authMiddleware, async (req, res) => {
-  try {
-    const {
-      email_notifications,
-      shipment_updates,
-      payment_notifications,
-      document_notifications,
-      language,
-      currency
-    } = req.body
-
-    const result = await pool.query(
-      `INSERT INTO user_settings (
-        user_id,
-        email_notifications,
-        shipment_updates,
-        payment_notifications,
-        document_notifications,
-        language,
-        currency
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        email_notifications = EXCLUDED.email_notifications,
-        shipment_updates = EXCLUDED.shipment_updates,
-        payment_notifications = EXCLUDED.payment_notifications,
-        document_notifications = EXCLUDED.document_notifications,
-        language = EXCLUDED.language,
-        currency = EXCLUDED.currency,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING
-        email_notifications,
-        shipment_updates,
-        payment_notifications,
-        document_notifications,
-        language,
-        currency`,
-      [
-        req.user.id,
-        email_notifications ?? true,
-        shipment_updates ?? true,
-        payment_notifications ?? true,
-        document_notifications ?? true,
-        language || 'English',
-        currency || 'USD'
-      ]
-    )
-
-    res.json({
-      message: 'Settings saved successfully',
-      settings: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE Settings Error:', error)
-
-    res.status(500).json({
-      message: 'Failed to save settings'
-    })
-  }
-})
-
-
-// ==============================
-// BUSINESS PROFILE
-// ==============================
-
-// GET BUSINESS PROFILE
-
-app.get('/api/business-profile', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
-        u.id,
-        u.name,
-        u.email,
-        u.role,
-        u.status,
-        bp.business_name,
-        bp.phone,
-        bp.business_type,
-        bp.registration_number,
-        bp.address,
-        bp.city,
-        bp.country
-       FROM users u
-       LEFT JOIN business_profiles bp
-         ON u.id = bp.user_id
-       WHERE u.id = $1`,
-      [req.user.id]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'User profile not found'
+      res.status(500).json({
+        message: 'Failed to fetch business profile'
       })
     }
-
-    res.json(result.rows[0])
-
-  } catch (error) {
-    console.error('GET Business Profile Error:', error)
-
-    res.status(500).json({
-      message: 'Failed to fetch business profile'
-    })
   }
-})
+)
 
 
-// CREATE / UPDATE BUSINESS PROFILE
-
-app.put('/api/business-profile', authMiddleware, async (req, res) => {
-  try {
-    const {
-      business_name,
-      phone,
-      business_type,
-      registration_number,
-      address,
-      city,
-      country
-    } = req.body
-
-    const result = await pool.query(
-      `INSERT INTO business_profiles (
-        user_id,
+app.put(
+  '/api/business-profile',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
         business_name,
         phone,
         business_type,
@@ -540,106 +383,97 @@ app.put('/api/business-profile', authMiddleware, async (req, res) => {
         address,
         city,
         country
+      } = req.body
+
+      const result = await pool.query(
+        `INSERT INTO business_profiles
+        (
+          user_id,
+          business_name,
+          phone,
+          business_type,
+          registration_number,
+          address,
+          city,
+          country,
+          updated_at
+        )
+        VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          business_name = EXCLUDED.business_name,
+          phone = EXCLUDED.phone,
+          business_type = EXCLUDED.business_type,
+          registration_number = EXCLUDED.registration_number,
+          address = EXCLUDED.address,
+          city = EXCLUDED.city,
+          country = EXCLUDED.country,
+          updated_at = CURRENT_TIMESTAMP
+
+        RETURNING *`,
+        [
+          req.user.id,
+          business_name,
+          phone,
+          business_type,
+          registration_number,
+          address,
+          city,
+          country || 'India'
+        ]
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        business_name = EXCLUDED.business_name,
-        phone = EXCLUDED.phone,
-        business_type = EXCLUDED.business_type,
-        registration_number = EXCLUDED.registration_number,
-        address = EXCLUDED.address,
-        city = EXCLUDED.city,
-        country = EXCLUDED.country,
-        updated_at = CURRENT_TIMESTAMP
-      RETURNING *`,
-      [
-        req.user.id,
-        business_name || null,
-        phone || null,
-        business_type || null,
-        registration_number || null,
-        address || null,
-        city || null,
-        country || 'India'
-      ]
-    )
 
-    res.json({
-      message: 'Business profile updated successfully',
-      profile: result.rows[0]
-    })
+      res.json(result.rows[0])
 
-  } catch (error) {
-    console.error('UPDATE Business Profile Error:', error)
+    } catch (error) {
+      console.error('UPDATE BUSINESS PROFILE ERROR:', error)
 
-    res.status(500).json({
-      message: 'Failed to update business profile'
-    })
-  }
-})
-
-
-// ==============================
-// GET USER CARGO
-// ==============================
-
-app.get('/api/cargo', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT *
-       FROM cargo
-       WHERE user_id = $1
-       ORDER BY id DESC`,
-      [req.user.id]
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to fetch cargo'
-    })
-  }
-})
-
-
-// ==============================
-// ADD NEW CARGO
-// ==============================
-
-app.post('/api/cargo', authMiddleware, async (req, res) => {
-  try {
-    const {
-      product_name,
-      category,
-      quantity,
-      weight,
-      dimensions,
-      package_type,
-      number_of_packages,
-      declared_value,
-      currency
-    } = req.body
-
-    if (
-      !product_name ||
-      !category ||
-      !quantity ||
-      !weight ||
-      !number_of_packages ||
-      !declared_value
-    ) {
-      return res.status(400).json({
-        message: 'Required cargo fields are missing'
+      res.status(500).json({
+        message: 'Failed to update business profile'
       })
     }
+  }
+)
 
-    const result = await pool.query(
-      `INSERT INTO cargo (
-        user_id,
+
+// =====================================================
+// CARGO
+// =====================================================
+
+app.get(
+  '/api/cargo',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT *
+         FROM cargo
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [req.user.id]
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET CARGO ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch cargo'
+      })
+    }
+  }
+)
+
+
+app.post(
+  '/api/cargo',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
         product_name,
         category,
         quantity,
@@ -649,287 +483,131 @@ app.post('/api/cargo', authMiddleware, async (req, res) => {
         number_of_packages,
         declared_value,
         currency
+      } = req.body
+
+      const result = await pool.query(
+        `INSERT INTO cargo
+        (
+          user_id,
+          product_name,
+          category,
+          quantity,
+          weight,
+          dimensions,
+          package_type,
+          number_of_packages,
+          declared_value,
+          currency
+        )
+        VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        RETURNING *`,
+        [
+          req.user.id,
+          product_name,
+          category,
+          quantity,
+          weight,
+          dimensions,
+          package_type,
+          number_of_packages,
+          declared_value,
+          currency || 'USD'
+        ]
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *`,
-      [
-        req.user.id,
-        product_name,
-        category,
-        quantity,
-        weight,
-        dimensions,
-        package_type,
-        number_of_packages,
-        declared_value,
-        currency || 'USD'
-      ]
-    )
 
-    res.status(201).json({
-      message: 'Cargo added successfully',
-      cargo: result.rows[0]
-    })
+      res.status(201).json(result.rows[0])
 
-  } catch (error) {
-    console.error(error)
+    } catch (error) {
+      console.error('CREATE CARGO ERROR:', error)
 
-    res.status(500).json({
-      message: 'Failed to add cargo'
-    })
+      res.status(500).json({
+        message: 'Failed to create cargo'
+      })
+    }
   }
-})
+)
 
 
-// ==============================
-// DELETE CARGO
-// ==============================
-
-app.delete('/api/cargo/:id', authMiddleware, async (req, res) => {
-  try {
-    const cargoId = req.params.id
-
-    const result = await pool.query(
-      `DELETE FROM cargo
-       WHERE id = $1 AND user_id = $2
-       RETURNING *`,
-      [cargoId, req.user.id]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Cargo not found'
-      })
-    }
-
-    res.json({
-      message: 'Cargo deleted successfully',
-      cargo: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to delete cargo'
-    })
-  }
-})
-
-
-app.get('/api/admin/shipments', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
-      })
-    }
-
-    const result = await pool.query(
-      `SELECT
-        s.id,
-        s.shipment_number,
-        s.origin,
-        s.destination,
-        s.shipping_method,
-        s.estimated_cost,
-        s.currency,
-        s.status,
-        s.pickup_date,
-        s.created_at,
-
-        t.tracking_number,
-
-        c.product_name AS cargo_name,
-
-        bp.business_name,
-
-        u.name AS owner_name,
-        u.email AS owner_email,
-
-        p.name AS provider_name
-
-       FROM shipments s
-
-       LEFT JOIN public.tracking t
-         ON s.id = t.shipment_id
-
-       LEFT JOIN cargo c
-         ON s.cargo_id = c.id
-
-       LEFT JOIN business_profiles bp
-         ON s.user_id = bp.user_id
-
-       INNER JOIN users u
-         ON s.user_id = u.id
-
-       LEFT JOIN providers p
-         ON s.provider_id = p.id
-
-       ORDER BY s.id DESC`
-    )
-
-    return res.status(200).json(result.rows)
-
-  } catch (error) {
-    console.error('GET ADMIN SHIPMENTS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to fetch admin shipments'
-    })
-  }
-})
-
-
-app.put('/api/admin/shipments/:id/status', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
-      })
-    }
-
-    const shipmentId = req.params.id
-    const { status } = req.body
-
-    const allowedStatuses = [
-      'Pending',
-      'In Transit',
-      'Completed',
-      'Cancelled'
-    ]
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid shipment status'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE shipments
-       SET status = $1
-       WHERE id = $2
-       RETURNING *`,
-      [
-        status,
-        shipmentId
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Shipment not found'
-      })
-    }
-
-    return res.status(200).json({
-      message: 'Shipment status updated successfully',
-      shipment: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(
-      'UPDATE ADMIN SHIPMENT STATUS ERROR:',
-      error
-    )
-
-    return res.status(500).json({
-      message: 'Failed to update shipment status'
-    })
-  }
-}) 
-
-
-// ==============================
-// GET USER SHIPMENTS
-// WITH PROVIDER + TRACKING DETAILS
-// ==============================
-
-app.get('/api/shipments', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
-        shipments.*,
-        providers.name AS provider_name,
-        providers.service_type AS provider_service_type,
-        tracking.tracking_number
-       FROM shipments
-       LEFT JOIN providers
-         ON shipments.provider_id = providers.id
-       LEFT JOIN public.tracking
-         ON shipments.id = tracking.shipment_id
-       WHERE shipments.user_id = $1
-       ORDER BY shipments.id DESC`,
-      [req.user.id]
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-    console.error('GET SHIPMENTS ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to fetch shipments'
-    })
-  }
-})
-
-
-// ==============================
-// CREATE SHIPMENT
-// + AUTOMATIC TRACKING
-// ==============================
-
-app.post('/api/shipments', authMiddleware, async (req, res) => {
-  const client = await pool.connect()
-
-  try {
-    const {
-      cargo_id,
-      origin,
-      destination,
-      shipping_method,
-      provider_id,
-      estimated_cost,
-      currency,
-      pickup_date
-    } = req.body
-
-    if (
-      !origin ||
-      !destination ||
-      !shipping_method
-    ) {
-      return res.status(400).json({
-        message: 'Origin, destination and shipping method are required'
-      })
-    }
-
-    if (provider_id) {
-      const providerCheck = await client.query(
-        `SELECT id
-         FROM providers
+app.delete(
+  '/api/cargo/:id',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `DELETE FROM cargo
          WHERE id = $1
-         AND status = 'Active'`,
-        [provider_id]
+         AND user_id = $2
+         RETURNING *`,
+        [
+          req.params.id,
+          req.user.id
+        ]
       )
 
-      if (providerCheck.rows.length === 0) {
-        return res.status(400).json({
-          message: 'Selected logistics provider is not available'
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Cargo not found'
         })
       }
+
+      res.json({
+        message: 'Cargo deleted successfully'
+      })
+
+    } catch (error) {
+      console.error('DELETE CARGO ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to delete cargo'
+      })
     }
+  }
+)
 
-    await client.query('BEGIN')
 
-    const shipmentNumber = `SC-${Date.now()}`
+// =====================================================
+// SHIPMENTS - BUSINESS USER
+// =====================================================
 
-    const shipmentResult = await client.query(
-      `INSERT INTO shipments (
-        user_id,
+app.get(
+  '/api/shipments',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+          s.*,
+          c.product_name,
+          c.category
+         FROM shipments s
+         LEFT JOIN cargo c
+           ON s.cargo_id = c.id
+         WHERE s.user_id = $1
+         ORDER BY s.created_at DESC`,
+        [req.user.id]
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET SHIPMENTS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch shipments'
+      })
+    }
+  }
+)
+
+
+app.post(
+  '/api/shipments',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
         cargo_id,
-        shipment_number,
         origin,
         destination,
         shipping_method,
@@ -937,669 +615,628 @@ app.post('/api/shipments', authMiddleware, async (req, res) => {
         estimated_cost,
         currency,
         pickup_date
+      } = req.body
+
+      const shipmentNumber =
+        'SC-' +
+        Date.now()
+
+      const result = await pool.query(
+        `INSERT INTO shipments
+        (
+          user_id,
+          cargo_id,
+          shipment_number,
+          origin,
+          destination,
+          shipping_method,
+          provider_id,
+          estimated_cost,
+          currency,
+          pickup_date
+        )
+        VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        RETURNING *`,
+        [
+          req.user.id,
+          cargo_id || null,
+          shipmentNumber,
+          origin,
+          destination,
+          shipping_method,
+          provider_id || null,
+          estimated_cost || null,
+          currency || 'USD',
+          pickup_date || null
+        ]
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *`,
-      [
-        req.user.id,
-        cargo_id || null,
-        shipmentNumber,
-        origin,
-        destination,
+
+      res.status(201).json(result.rows[0])
+
+    } catch (error) {
+      console.error('CREATE SHIPMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to create shipment'
+      })
+    }
+  }
+)
+
+
+app.put(
+  '/api/shipments/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { status } = req.body
+
+      const result = await pool.query(
+        `UPDATE shipments
+         SET status = $1
+         WHERE id = $2
+         AND user_id = $3
+         RETURNING *`,
+        [
+          status,
+          req.params.id,
+          req.user.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Shipment not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE SHIPMENT STATUS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update shipment'
+      })
+    }
+  }
+)
+
+
+app.delete(
+  '/api/shipments/:id',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `DELETE FROM shipments
+         WHERE id = $1
+         AND user_id = $2
+         RETURNING *`,
+        [
+          req.params.id,
+          req.user.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Shipment not found'
+        })
+      }
+
+      res.json({
+        message: 'Shipment deleted successfully'
+      })
+
+    } catch (error) {
+      console.error('DELETE SHIPMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to delete shipment'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// PROVIDERS - BUSINESS USER
+// =====================================================
+
+app.get(
+  '/api/providers',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT *
+         FROM providers
+         WHERE status = 'Active'
+         ORDER BY id`
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET PROVIDERS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch providers'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// COST ESTIMATOR
+// =====================================================
+
+app.post(
+  '/api/cost-estimate',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
+        weight,
+        shipping_method
+      } = req.body
+
+      const weightValue = Number(weight)
+
+      if (!weightValue || weightValue <= 0) {
+        return res.status(400).json({
+          message: 'Valid weight is required'
+        })
+      }
+
+      let rate = 5
+
+      if (shipping_method === 'Air') {
+        rate = 12
+      } else if (shipping_method === 'Sea') {
+        rate = 4
+      } else if (shipping_method === 'Road') {
+        rate = 6
+      }
+
+      const estimatedCost =
+        weightValue * rate
+
+      res.json({
+        weight: weightValue,
         shipping_method,
-        provider_id || null,
-        estimated_cost || 0,
-        currency || 'USD',
-        pickup_date || null
-      ]
-    )
+        rate,
+        estimated_cost: estimatedCost,
+        currency: 'USD'
+      })
 
-    const shipment = shipmentResult.rows[0]
+    } catch (error) {
+      console.error('COST ESTIMATE ERROR:', error)
 
-    const trackingNumber = `TRK-${Date.now()}`
+      res.status(500).json({
+        message: 'Failed to calculate cost'
+      })
+    }
+  }
+)
 
-    const trackingResult = await client.query(
-      `INSERT INTO public.tracking (
+
+// =====================================================
+// DOCUMENTS - BUSINESS USER
+// =====================================================
+
+app.get(
+  '/api/documents',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+          d.*,
+          s.shipment_number
+         FROM documents d
+         LEFT JOIN shipments s
+           ON d.shipment_id = s.id
+         WHERE d.user_id = $1
+         ORDER BY d.uploaded_at DESC`,
+        [req.user.id]
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET DOCUMENTS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch documents'
+      })
+    }
+  }
+)
+
+
+app.post(
+  '/api/documents',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
+        shipment_id,
+        document_name,
+        document_type,
+        file_path
+      } = req.body
+
+      const result = await pool.query(
+        `INSERT INTO documents
+        (
+          user_id,
+          shipment_id,
+          document_name,
+          document_type,
+          file_path
+        )
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING *`,
+        [
+          req.user.id,
+          shipment_id || null,
+          document_name,
+          document_type,
+          file_path || null
+        ]
+      )
+
+      res.status(201).json(result.rows[0])
+
+    } catch (error) {
+      console.error('CREATE DOCUMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to create document'
+      })
+    }
+  }
+)
+
+
+app.put(
+  '/api/documents/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { status } = req.body
+
+      const result = await pool.query(
+        `UPDATE documents
+         SET status = $1
+         WHERE id = $2
+         AND user_id = $3
+         RETURNING *`,
+        [
+          status,
+          req.params.id,
+          req.user.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Document not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE DOCUMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update document'
+      })
+    }
+  }
+)
+
+
+app.delete(
+  '/api/documents/:id',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `DELETE FROM documents
+         WHERE id = $1
+         AND user_id = $2
+         RETURNING *`,
+        [
+          req.params.id,
+          req.user.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Document not found'
+        })
+      }
+
+      res.json({
+        message: 'Document deleted successfully'
+      })
+
+    } catch (error) {
+      console.error('DELETE DOCUMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to delete document'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// PAYMENTS
+// =====================================================
+
+app.get(
+  '/api/payments',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+          p.*,
+          s.shipment_number
+         FROM payments p
+         LEFT JOIN shipments s
+           ON p.shipment_id = s.id
+         WHERE p.user_id = $1
+         ORDER BY p.payment_date DESC`,
+        [req.user.id]
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET PAYMENTS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch payments'
+      })
+    }
+  }
+)
+
+
+app.post(
+  '/api/payments',
+  authMiddleware,
+  async (req, res) => {
+
+    const client = await pool.connect()
+
+    try {
+
+      const {
+        shipment_id,
+        amount,
+        currency,
+        payment_method
+      } = req.body
+
+      await client.query('BEGIN')
+
+      const paymentReference =
+        'PAY-' + Date.now()
+
+      const paymentResult = await client.query(
+        `INSERT INTO payments
+        (
+          user_id,
+          shipment_id,
+          payment_reference,
+          amount,
+          currency,
+          payment_method,
+          status
+        )
+        VALUES
+        ($1,$2,$3,$4,$5,$6,'Completed')
+        RETURNING *`,
+        [
+          req.user.id,
+          shipment_id || null,
+          paymentReference,
+          amount,
+          currency || 'USD',
+          payment_method || 'Online'
+        ]
+      )
+
+      const payment =
+        paymentResult.rows[0]
+
+      const invoiceNumber =
+        'INV-' + Date.now()
+
+      await client.query(
+        `INSERT INTO invoices
+        (
+          user_id,
+          payment_id,
+          shipment_id,
+          invoice_number,
+          amount,
+          currency,
+          status
+        )
+        VALUES
+        ($1,$2,$3,$4,$5,$6,'Generated')`,
+        [
+          req.user.id,
+          payment.id,
+          shipment_id || null,
+          invoiceNumber,
+          amount,
+          currency || 'USD'
+        ]
+      )
+
+      await client.query('COMMIT')
+
+      res.status(201).json({
+        message: 'Payment completed successfully',
+        payment
+      })
+
+    } catch (error) {
+
+      await client.query('ROLLBACK')
+
+      console.error('PAYMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Payment failed'
+      })
+
+    } finally {
+      client.release()
+    }
+  }
+)
+
+
+app.put(
+  '/api/payments/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const { status } = req.body
+
+      const result = await pool.query(
+        `UPDATE payments
+         SET status = $1
+         WHERE id = $2
+         AND user_id = $3
+         RETURNING *`,
+        [
+          status,
+          req.params.id,
+          req.user.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Payment not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE PAYMENT ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update payment'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// INVOICES
+// =====================================================
+
+app.get(
+  '/api/invoices',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+          i.*,
+          s.shipment_number,
+          p.payment_reference
+         FROM invoices i
+         LEFT JOIN shipments s
+           ON i.shipment_id = s.id
+         LEFT JOIN payments p
+           ON i.payment_id = p.id
+         WHERE i.user_id = $1
+         ORDER BY i.invoice_date DESC`,
+        [req.user.id]
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET INVOICES ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch invoices'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// TRACKING
+// =====================================================
+
+app.get(
+  '/api/tracking',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT
+          t.*,
+          s.shipment_number,
+          s.origin,
+          s.destination
+         FROM tracking t
+         INNER JOIN shipments s
+           ON t.shipment_id = s.id
+         WHERE s.user_id = $1
+         ORDER BY t.last_updated DESC`,
+        [req.user.id]
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('GET TRACKING ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch tracking'
+      })
+    }
+  }
+)
+
+
+app.post(
+  '/api/tracking',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
         shipment_id,
         tracking_number,
         current_location,
         status,
         estimated_delivery
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *`,
-      [
-        shipment.id,
-        trackingNumber,
-        origin,
-        'Pending',
-        null
-      ]
-    )
+      } = req.body
 
-    const tracking = trackingResult.rows[0]
-
-    await client.query('COMMIT')
-
-    res.status(201).json({
-      message: 'Shipment and tracking created successfully',
-      shipment,
-      tracking
-    })
-
-  } catch (error) {
-
-    await client.query('ROLLBACK')
-
-    console.error('CREATE SHIPMENT ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to create shipment and tracking'
-    })
-
-  } finally {
-    client.release()
-  }
-})
-
-
-// ==============================
-// UPDATE SHIPMENT STATUS
-// ==============================
-
-app.put('/api/shipments/:id/status', authMiddleware, async (req, res) => {
-  try {
-    const shipmentId = req.params.id
-    const { status } = req.body
-
-    if (!status) {
-      return res.status(400).json({
-        message: 'Status is required'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE shipments
-       SET status = $1
-       WHERE id = $2
-       AND user_id = $3
-       RETURNING *`,
-      [
-        status,
-        shipmentId,
-        req.user.id
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Shipment not found'
-      })
-    }
-
-    res.json({
-      message: 'Shipment status updated successfully',
-      shipment: result.rows[0]
-    })
-
-  } catch (error) {
-
-    console.error('UPDATE SHIPMENT STATUS ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to update shipment status'
-    })
-  }
-})
-
-
-// ==============================
-// DELETE SHIPMENT
-// ==============================
-
-app.delete('/api/shipments/:id', authMiddleware, async (req, res) => {
-  try {
-    const shipmentId = req.params.id
-
-    const result = await pool.query(
-      `DELETE FROM shipments
-       WHERE id = $1
-       AND user_id = $2
-       RETURNING *`,
-      [
-        shipmentId,
-        req.user.id
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Shipment not found'
-      })
-    }
-
-    res.json({
-      message: 'Shipment deleted successfully',
-      shipment: result.rows[0]
-    })
-
-  } catch (error) {
-
-    console.error('DELETE SHIPMENT ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to delete shipment'
-    })
-  }
-})
-
-
-// ==============================
-// GET ACTIVE PROVIDERS
-// ==============================
-
-app.get('/api/providers', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT *
-       FROM providers
-       WHERE status = 'Active'
-       ORDER BY id ASC`
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-
-    console.error('GET PROVIDERS ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to fetch providers'
-    })
-  }
-})
-
-
-// ==============================
-// ADD PROVIDER
-// ==============================
-
-app.post('/api/providers', authMiddleware, async (req, res) => {
-  try {
-    const {
-      name,
-      service_type,
-      contact_email,
-      contact_phone,
-      origin_location,
-      service_area
-    } = req.body
-
-    if (!name || !service_type) {
-      return res.status(400).json({
-        message: 'Provider name and service type are required'
-      })
-    }
-
-    const result = await pool.query(
-      `INSERT INTO providers (
-        name,
-        service_type,
-        contact_email,
-        contact_phone,
-        origin_location,
-        service_area
-      )
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *`,
-      [
-        name,
-        service_type,
-        contact_email || null,
-        contact_phone || null,
-        origin_location || null,
-        service_area || null
-      ]
-    )
-
-    res.status(201).json({
-      message: 'Provider added successfully',
-      provider: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to add provider'
-    })
-  }
-})
-
-
-// ==============================
-// UPDATE PROVIDER
-// ==============================
-
-app.put('/api/providers/:id', authMiddleware, async (req, res) => {
-  try {
-    const providerId = req.params.id
-
-    const {
-      name,
-      service_type,
-      contact_email,
-      contact_phone,
-      origin_location,
-      service_area,
-      status
-    } = req.body
-
-    const result = await pool.query(
-      `UPDATE providers
-       SET
-         name = COALESCE($1, name),
-         service_type = COALESCE($2, service_type),
-         contact_email = COALESCE($3, contact_email),
-         contact_phone = COALESCE($4, contact_phone),
-         origin_location = COALESCE($5, origin_location),
-         service_area = COALESCE($6, service_area),
-         status = COALESCE($7, status)
-       WHERE id = $8
-       RETURNING *`,
-      [
-        name,
-        service_type,
-        contact_email,
-        contact_phone,
-        origin_location,
-        service_area,
-        status,
-        providerId
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Provider not found'
-      })
-    }
-
-    res.json({
-      message: 'Provider updated successfully',
-      provider: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to update provider'
-    })
-  }
-})
-
-
-// ==============================
-// DELETE PROVIDER
-// ==============================
-
-app.delete('/api/providers/:id', authMiddleware, async (req, res) => {
-  try {
-    const providerId = req.params.id
-
-    const result = await pool.query(
-      `DELETE FROM providers
-       WHERE id = $1
-       RETURNING *`,
-      [providerId]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Provider not found'
-      })
-    }
-
-    res.json({
-      message: 'Provider deleted successfully',
-      provider: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to delete provider'
-    })
-  }
-})
-
-
-// ==============================
-// COST ESTIMATOR
-// ==============================
-
-app.post('/api/cost-estimate', authMiddleware, async (req, res) => {
-  try {
-    const {
-      weight,
-      shipping_method,
-      origin,
-      destination
-    } = req.body
-
-    if (!weight || !shipping_method || !origin || !destination) {
-      return res.status(400).json({
-        message: 'Weight, shipping method, origin and destination are required'
-      })
-    }
-
-    const weightValue = Number(weight)
-
-    if (weightValue <= 0) {
-      return res.status(400).json({
-        message: 'Weight must be greater than 0'
-      })
-    }
-
-    let ratePerKg = 0
-
-    if (shipping_method === 'Air') {
-      ratePerKg = 8
-    } else if (shipping_method === 'Sea') {
-      ratePerKg = 3
-    } else if (shipping_method === 'Road') {
-      ratePerKg = 5
-    } else {
-      return res.status(400).json({
-        message: 'Invalid shipping method'
-      })
-    }
-
-    const baseCost = weightValue * ratePerKg
-
-    let locationCharge = 0
-
-    if (
-      origin.toLowerCase().includes('india') &&
-      !destination.toLowerCase().includes('india')
-    ) {
-      locationCharge = 100
-    } else {
-      locationCharge = 50
-    }
-
-    const estimatedCost = baseCost + locationCharge
-
-    res.json({
-      message: 'Cost estimated successfully',
-      estimate: {
-        weight: weightValue,
-        shipping_method,
-        origin,
-        destination,
-        rate_per_kg: ratePerKg,
-        base_cost: baseCost,
-        location_charge: locationCharge,
-        estimated_cost: estimatedCost,
-        currency: 'USD'
-      }
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to calculate shipping cost'
-    })
-  }
-})
-
-
-// ==============================
-// DOCUMENTS
-// ==============================
-
-// GET DOCUMENTS
-
-app.get('/api/documents', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
-        documents.*,
-        shipments.shipment_number
-       FROM documents
-       LEFT JOIN shipments
-         ON documents.shipment_id = shipments.id
-       WHERE documents.user_id = $1
-       ORDER BY documents.id DESC`,
-      [req.user.id]
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to fetch documents'
-    })
-  }
-})
-
-
-// ADD DOCUMENT
-
-app.post('/api/documents', authMiddleware, async (req, res) => {
-  try {
-    const {
-      shipment_id,
-      document_name,
-      document_type,
-      file_path
-    } = req.body
-
-    if (!document_name || !document_type) {
-      return res.status(400).json({
-        message: 'Document name and document type are required'
-      })
-    }
-
-    if (shipment_id) {
-      const shipmentCheck = await pool.query(
-        `SELECT id
-         FROM shipments
-         WHERE id = $1
-         AND user_id = $2`,
-        [shipment_id, req.user.id]
-      )
-
-      if (shipmentCheck.rows.length === 0) {
-        return res.status(400).json({
-          message: 'Invalid shipment selected'
-        })
-      }
-    }
-
-    const result = await pool.query(
-      `INSERT INTO documents (
-        user_id,
-        shipment_id,
-        document_name,
-        document_type,
-        file_path
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *`,
-      [
-        req.user.id,
-        shipment_id || null,
-        document_name,
-        document_type,
-        file_path || null
-      ]
-    )
-
-    res.status(201).json({
-      message: 'Document added successfully',
-      document: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to add document'
-    })
-  }
-})
-
-
-// UPDATE DOCUMENT STATUS
-
-app.put('/api/documents/:id/status', authMiddleware, async (req, res) => {
-  try {
-    const documentId = req.params.id
-    const { status } = req.body
-
-    const allowedStatuses = [
-      'Pending',
-      'Approved',
-      'Rejected'
-    ]
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid document status'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE documents
-       SET status = $1
-       WHERE id = $2
-       AND user_id = $3
-       RETURNING *`,
-      [
-        status,
-        documentId,
-        req.user.id
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Document not found'
-      })
-    }
-
-    res.json({
-      message: 'Document status updated successfully',
-      document: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to update document status'
-    })
-  }
-})
-
-
-// DELETE DOCUMENT
-
-app.delete('/api/documents/:id', authMiddleware, async (req, res) => {
-  try {
-    const documentId = req.params.id
-
-    const result = await pool.query(
-      `DELETE FROM documents
-       WHERE id = $1
-       AND user_id = $2
-       RETURNING *`,
-      [
-        documentId,
-        req.user.id
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Document not found'
-      })
-    }
-
-    res.json({
-      message: 'Document deleted successfully',
-      document: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to delete document'
-    })
-  }
-})
-
-
-// ==============================
-// PAYMENTS
-// ==============================
-
-// GET PAYMENTS
-
-app.get('/api/payments', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
-        payments.*,
-        shipments.shipment_number
-       FROM payments
-       LEFT JOIN shipments
-         ON payments.shipment_id = shipments.id
-       WHERE payments.user_id = $1
-       ORDER BY payments.id DESC`,
-      [req.user.id]
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to fetch payments'
-    })
-  }
-})
-
-
-// CREATE PAYMENT
-
-app.post('/api/payments', authMiddleware, async (req, res) => {
-  const client = await pool.connect()
-
-  try {
-    const {
-      shipment_id,
-      amount,
-      currency,
-      payment_method
-    } = req.body
-
-    if (!amount || Number(amount) <= 0) {
-      return res.status(400).json({
-        message: 'Valid payment amount is required'
-      })
-    }
-
-    if (shipment_id) {
-      const shipmentCheck = await client.query(
+      const shipment = await pool.query(
         `SELECT id
          FROM shipments
          WHERE id = $1
@@ -1610,632 +1247,596 @@ app.post('/api/payments', authMiddleware, async (req, res) => {
         ]
       )
 
-      if (shipmentCheck.rows.length === 0) {
-        return res.status(400).json({
-          message: 'Invalid shipment selected'
+      if (shipment.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Shipment not found'
         })
       }
-    }
 
-    await client.query('BEGIN')
-
-    const paymentReference = `PAY-${Date.now()}`
-
-    const paymentResult = await client.query(
-      `INSERT INTO payments (
-        user_id,
-        shipment_id,
-        payment_reference,
-        amount,
-        currency,
-        payment_method,
-        status
+      const result = await pool.query(
+        `INSERT INTO tracking
+        (
+          shipment_id,
+          tracking_number,
+          current_location,
+          status,
+          estimated_delivery
+        )
+        VALUES ($1,$2,$3,$4,$5)
+        RETURNING *`,
+        [
+          shipment_id,
+          tracking_number,
+          current_location,
+          status || 'Pending',
+          estimated_delivery || null
+        ]
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
-      [
-        req.user.id,
-        shipment_id || null,
-        paymentReference,
-        Number(amount),
-        currency || 'USD',
-        payment_method || 'Online',
-        'Completed'
-      ]
-    )
 
-    const payment = paymentResult.rows[0]
+      res.status(201).json(result.rows[0])
 
-    const invoiceNumber = `INV-${Date.now()}`
+    } catch (error) {
+      console.error('CREATE TRACKING ERROR:', error)
 
-    const invoiceResult = await client.query(
-      `INSERT INTO invoices (
-        user_id,
-        payment_id,
-        shipment_id,
-        invoice_number,
-        amount,
-        currency,
-        status
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *`,
-      [
-        req.user.id,
-        payment.id,
-        shipment_id || null,
-        invoiceNumber,
-        Number(amount),
-        currency || 'USD',
-        'Generated'
-      ]
-    )
-
-    const invoice = invoiceResult.rows[0]
-
-    await client.query('COMMIT')
-
-    res.status(201).json({
-      message: 'Payment completed and invoice generated successfully',
-      payment,
-      invoice
-    })
-
-  } catch (error) {
-    await client.query('ROLLBACK')
-
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to create payment and invoice'
-    })
-
-  } finally {
-    client.release()
+      res.status(500).json({
+        message: 'Failed to create tracking'
+      })
+    }
   }
-})
+)
 
 
-// ==============================
-// TRACKING
-// ==============================
-
-// GET TRACKING
-
-app.get('/api/tracking', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
-        t.*,
-        s.shipment_number,
-        s.origin,
-        s.destination,
-        s.shipping_method,
-        p.name AS provider_name
-       FROM public.tracking t
-       INNER JOIN public.shipments s
-         ON t.shipment_id = s.id
-       LEFT JOIN public.providers p
-         ON s.provider_id = p.id
-       WHERE s.user_id = $1
-       ORDER BY t.id DESC`,
-      [req.user.id]
-    )
-
-    res.json(result.rows)
-
-  } catch (error) {
-    console.error('GET Tracking Error:', error)
-
-    res.status(500).json({
-      message: 'Failed to fetch tracking information'
-    })
-  }
-})
-
-
-// CREATE TRACKING
-// Normal shipment creation already creates tracking automatically.
-
-app.post('/api/tracking', authMiddleware, async (req, res) => {
-  try {
-    const {
-      shipment_id,
-      current_location,
-      status,
-      estimated_delivery
-    } = req.body
-
-    if (!shipment_id) {
-      return res.status(400).json({
-        message: 'Shipment is required'
-      })
-    }
-
-    const shipmentResult = await pool.query(
-      `SELECT
-        id,
-        shipment_number,
-        origin
-       FROM public.shipments
-       WHERE id = $1
-       AND user_id = $2`,
-      [
-        shipment_id,
-        req.user.id
-      ]
-    )
-
-    if (shipmentResult.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Shipment not found'
-      })
-    }
-
-    const existingTracking = await pool.query(
-      `SELECT id
-       FROM public.tracking
-       WHERE shipment_id = $1`,
-      [shipment_id]
-    )
-
-    if (existingTracking.rows.length > 0) {
-      return res.status(409).json({
-        message: 'Tracking already exists for this shipment'
-      })
-    }
-
-    const trackingNumber = `TRK-${Date.now()}`
-
-    const result = await pool.query(
-      `INSERT INTO public.tracking (
-        shipment_id,
-        tracking_number,
+app.put(
+  '/api/tracking/:id',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const {
         current_location,
         status,
         estimated_delivery
+      } = req.body
+
+      const result = await pool.query(
+        `UPDATE tracking t
+         SET
+           current_location = $1,
+           status = $2,
+           estimated_delivery = $3,
+           last_updated = CURRENT_TIMESTAMP
+
+         FROM shipments s
+
+         WHERE t.id = $4
+         AND t.shipment_id = s.id
+         AND s.user_id = $5
+
+         RETURNING t.*`,
+        [
+          current_location,
+          status,
+          estimated_delivery || null,
+          req.params.id,
+          req.user.id
+        ]
       )
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *`,
-      [
-        shipment_id,
-        trackingNumber,
-        current_location || shipmentResult.rows[0].origin,
-        status || 'Pending',
-        estimated_delivery || null
-      ]
-    )
 
-    res.status(201).json({
-      message: 'Tracking created successfully',
-      tracking: result.rows[0]
-    })
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Tracking record not found'
+        })
+      }
 
-  } catch (error) {
-    console.error('CREATE Tracking Error:', error)
+      res.json(result.rows[0])
 
-    res.status(500).json({
-      message: 'Failed to create tracking'
-    })
+    } catch (error) {
+      console.error('UPDATE TRACKING ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update tracking'
+      })
+    }
   }
-})
+)
 
 
-// UPDATE TRACKING
+// =====================================================
+// ADMIN - USERS
+// =====================================================
 
-app.put('/api/tracking/:id', authMiddleware, async (req, res) => {
-  try {
-    const trackingId = req.params.id
+app.get(
+  '/api/users',
+  authMiddleware,
+  async (req, res) => {
+    try {
 
-    const {
-      current_location,
-      status,
-      estimated_delivery
-    } = req.body
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
 
-    const result = await pool.query(
-      `UPDATE public.tracking t
-       SET
-         current_location = COALESCE($1, t.current_location),
-         status = COALESCE($2, t.status),
-         estimated_delivery = COALESCE($3, t.estimated_delivery),
-         last_updated = CURRENT_TIMESTAMP
-       FROM public.shipments s
-       WHERE t.id = $4
-       AND t.shipment_id = s.id
-       AND s.user_id = $5
-       RETURNING t.*`,
-      [
-        current_location || null,
-        status || null,
-        estimated_delivery || null,
-        trackingId,
-        req.user.id
-      ]
-    )
+      const result = await pool.query(
+        `SELECT
+          id,
+          name,
+          email,
+          role,
+          status,
+          created_at
+         FROM users
+         ORDER BY created_at DESC`
+      )
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Tracking record not found'
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('ADMIN USERS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch users'
       })
     }
-
-    res.json({
-      message: 'Tracking updated successfully',
-      tracking: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE Tracking Error:', error)
-
-    res.status(500).json({
-      message: 'Failed to update tracking'
-    })
   }
-})
+)
 
 
-// ==============================
-// UPDATE PAYMENT STATUS
-// ==============================
+app.put(
+  '/api/users/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
 
-app.put('/api/payments/:id/status', authMiddleware, async (req, res) => {
-  try {
-    const paymentId = req.params.id
-    const { status } = req.body
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
 
-    const allowedStatuses = [
-      'Pending',
-      'Completed',
-      'Failed',
-      'Refunded'
-    ]
+      const { status } = req.body
 
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid payment status'
+      const result = await pool.query(
+        `UPDATE users
+         SET status = $1
+         WHERE id = $2
+         RETURNING id, name, email, role, status`,
+        [
+          status,
+          req.params.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'User not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE USER STATUS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update user status'
       })
     }
-
-    const result = await pool.query(
-      `UPDATE payments
-       SET status = $1
-       WHERE id = $2
-       AND user_id = $3
-       RETURNING *`,
-      [
-        status,
-        paymentId,
-        req.user.id
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Payment not found'
-      })
-    }
-
-    res.json({
-      message: 'Payment status updated successfully',
-      payment: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error(error)
-
-    res.status(500).json({
-      message: 'Failed to update payment status'
-    })
   }
-})
+)
 
 
-// ==============================
-// INVOICES
-// ==============================
+// =====================================================
+// ADMIN - BUSINESSES
+// =====================================================
 
-// GET INVOICES
+app.get(
+  '/api/admin/businesses',
+  authMiddleware,
+  async (req, res) => {
+    try {
 
-app.get('/api/invoices', authMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT
-        invoices.*,
-        shipments.shipment_number,
-        payments.payment_reference,
-        payments.payment_method
-       FROM invoices
-       LEFT JOIN shipments
-         ON invoices.shipment_id = shipments.id
-       LEFT JOIN payments
-         ON invoices.payment_id = payments.id
-       WHERE invoices.user_id = $1
-       ORDER BY invoices.id DESC`,
-      [req.user.id]
-    )
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
 
-    res.json(result.rows)
+      const result = await pool.query(
+        `SELECT
+          bp.*,
+          u.name AS user_name,
+          u.email AS user_email,
+          u.status AS user_status
 
-  } catch (error) {
-    console.error(error)
+         FROM business_profiles bp
 
-    res.status(500).json({
-      message: 'Failed to fetch invoices'
-    })
+         INNER JOIN users u
+           ON bp.user_id = u.id
+
+         ORDER BY bp.created_at DESC`
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('ADMIN BUSINESSES ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch businesses'
+      })
+    }
   }
-})
+)
 
-app.get('/api/admin/documents', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+
+// =====================================================
+// ADMIN - SHIPMENTS
+// =====================================================
+
+app.get(
+  '/api/admin/shipments',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT
+          s.*,
+          s.provider_id,
+          u.name AS owner_name,
+          u.email AS owner_email,
+          p.name AS provider_name
+
+         FROM shipments s
+
+         INNER JOIN users u
+           ON s.user_id = u.id
+
+         LEFT JOIN providers p
+           ON s.provider_id = p.id
+
+         ORDER BY s.created_at DESC`
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('ADMIN SHIPMENTS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch shipments'
       })
     }
-
-    const result = await pool.query(
-      `SELECT
-        d.id,
-        d.document_name,
-        d.document_type,
-        d.file_path,
-        d.status,
-        d.uploaded_at,
-
-        s.shipment_number,
-        s.origin,
-        s.destination,
-
-        u.name AS owner_name,
-        u.email AS owner_email,
-
-        bp.business_name
-
-       FROM documents d
-
-       LEFT JOIN shipments s
-         ON d.shipment_id = s.id
-
-       INNER JOIN users u
-         ON d.user_id = u.id
-
-       LEFT JOIN business_profiles bp
-         ON d.user_id = bp.user_id
-
-       ORDER BY d.id DESC`
-    )
-
-    return res.status(200).json(result.rows)
-
-  } catch (error) {
-    console.error('GET ADMIN DOCUMENTS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to fetch admin documents'
-    })
   }
-})
+)
 
 
-app.put('/api/admin/documents/:id/status', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+app.put(
+  '/api/admin/shipments/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const { status } = req.body
+
+      const result = await pool.query(
+        `UPDATE shipments
+         SET status = $1
+         WHERE id = $2
+         RETURNING *`,
+        [
+          status,
+          req.params.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Shipment not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('ADMIN SHIPMENT STATUS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update shipment status'
       })
     }
-
-    const documentId = req.params.id
-    const { status } = req.body
-
-    const allowedStatuses = [
-      'Pending',
-      'Approved',
-      'Rejected'
-    ]
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid document status'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE documents
-       SET status = $1
-       WHERE id = $2
-       RETURNING *`,
-      [
-        status,
-        documentId
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Document not found'
-      })
-    }
-
-    return res.status(200).json({
-      message: 'Document status updated successfully',
-      document: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE ADMIN DOCUMENT STATUS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to update document status'
-    })
   }
-})
+)
 
-app.get('/api/admin/payments', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+
+app.put(
+  '/api/admin/shipments/:id/provider',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const {
+        provider_id
+      } = req.body
+
+      const result = await pool.query(
+        `UPDATE shipments
+         SET provider_id = $1
+         WHERE id = $2
+         RETURNING *`,
+        [
+          provider_id || null,
+          req.params.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Shipment not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('ASSIGN PROVIDER ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to assign provider'
       })
     }
-
-    const result = await pool.query(
-      `SELECT
-        p.id,
-        p.payment_reference,
-        p.amount,
-        p.currency,
-        p.payment_method,
-        p.status,
-        p.payment_date,
-
-        s.shipment_number,
-
-        u.name AS owner_name,
-        u.email AS owner_email,
-
-        bp.business_name
-
-       FROM payments p
-
-       LEFT JOIN shipments s
-         ON p.shipment_id = s.id
-
-       INNER JOIN users u
-         ON p.user_id = u.id
-
-       LEFT JOIN business_profiles bp
-         ON p.user_id = bp.user_id
-
-       ORDER BY p.id DESC`
-    )
-
-    return res.status(200).json(result.rows)
-
-  } catch (error) {
-    console.error('GET ADMIN PAYMENTS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to fetch admin payments'
-    })
   }
-})
+)
 
 
-app.put('/api/admin/payments/:id/status', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+// =====================================================
+// ADMIN - DOCUMENTS
+// =====================================================
+
+app.get(
+  '/api/admin/documents',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT
+          d.*,
+          u.name AS owner_name,
+          u.email AS owner_email,
+          s.shipment_number
+
+         FROM documents d
+
+         INNER JOIN users u
+           ON d.user_id = u.id
+
+         LEFT JOIN shipments s
+           ON d.shipment_id = s.id
+
+         ORDER BY d.uploaded_at DESC`
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('ADMIN DOCUMENTS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch documents'
       })
     }
-
-    const paymentId = req.params.id
-    const { status } = req.body
-
-    const allowedStatuses = [
-      'Pending',
-      'Completed',
-      'Failed',
-      'Refunded'
-    ]
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid payment status'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE payments
-       SET status = $1
-       WHERE id = $2
-       RETURNING *`,
-      [
-        status,
-        paymentId
-      ]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Payment not found'
-      })
-    }
-
-    return res.status(200).json({
-      message: 'Payment status updated successfully',
-      payment: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE ADMIN PAYMENT STATUS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to update payment status'
-    })
   }
-})
+)
 
-app.get('/api/admin/providers', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+
+app.put(
+  '/api/admin/documents/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const { status } = req.body
+
+      const result = await pool.query(
+        `UPDATE documents
+         SET status = $1
+         WHERE id = $2
+         RETURNING *`,
+        [
+          status,
+          req.params.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Document not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('ADMIN DOCUMENT STATUS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update document'
       })
     }
-
-    const result = await pool.query(
-      `SELECT *
-       FROM providers
-       ORDER BY id DESC`
-    )
-
-    res.status(200).json(result.rows)
-
-  } catch (error) {
-    console.error('GET ADMIN PROVIDERS ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to fetch providers'
-    })
   }
-})
+)
 
 
-app.post('/api/admin/providers', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+// =====================================================
+// ADMIN - PAYMENTS
+// =====================================================
+
+app.get(
+  '/api/admin/payments',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT
+          p.*,
+          u.name AS owner_name,
+          u.email AS owner_email,
+          s.shipment_number
+
+         FROM payments p
+
+         INNER JOIN users u
+           ON p.user_id = u.id
+
+         LEFT JOIN shipments s
+           ON p.shipment_id = s.id
+
+         ORDER BY p.payment_date DESC`
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('ADMIN PAYMENTS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch payments'
       })
     }
+  }
+)
 
-    const {
-      name,
-      service_type,
-      contact_email,
-      phone,
-      location,
-      coverage
-    } = req.body
 
-    if (
-      !name ||
-      !service_type ||
-      !contact_email ||
-      !phone ||
-      !location ||
-      !coverage
-    ) {
-      return res.status(400).json({
-        message: 'All provider fields are required'
+app.put(
+  '/api/admin/payments/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const { status } = req.body
+
+      const result = await pool.query(
+        `UPDATE payments
+         SET status = $1
+         WHERE id = $2
+         RETURNING *`,
+        [
+          status,
+          req.params.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Payment not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('ADMIN PAYMENT STATUS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update payment'
       })
     }
+  }
+)
 
-    const result = await pool.query(
-      `INSERT INTO providers (
+
+// =====================================================
+// ADMIN - PROVIDERS
+// =====================================================
+
+app.get(
+  '/api/admin/providers',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT *
+         FROM providers
+         ORDER BY id`
+      )
+
+      res.json(result.rows)
+
+    } catch (error) {
+      console.error('ADMIN PROVIDERS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch providers'
+      })
+    }
+  }
+)
+
+
+app.post(
+  '/api/admin/providers',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const {
         name,
         service_type,
         contact_email,
@@ -2243,379 +1844,327 @@ app.post('/api/admin/providers', authMiddleware, async (req, res) => {
         location,
         coverage,
         status
+      } = req.body
+
+      const result = await pool.query(
+        `INSERT INTO providers
+        (
+          name,
+          service_type,
+          contact_email,
+          phone,
+          location,
+          coverage,
+          status
+        )
+        VALUES
+        ($1,$2,$3,$4,$5,$6,$7)
+        RETURNING *`,
+        [
+          name,
+          service_type,
+          contact_email,
+          phone,
+          location,
+          coverage,
+          status || 'Active'
+        ]
       )
-      VALUES ($1, $2, $3, $4, $5, $6, 'Active')
-      RETURNING *`,
-      [
-        name,
-        service_type,
-        contact_email,
-        phone,
-        location,
-        coverage
-      ]
-    )
 
-    res.status(201).json({
-      message: 'Provider created successfully',
-      provider: result.rows[0]
-    })
+      res.status(201).json(result.rows[0])
 
-  } catch (error) {
-    console.error('CREATE ADMIN PROVIDER ERROR:', error)
+    } catch (error) {
+      console.error('CREATE PROVIDER ERROR:', error)
 
-    res.status(500).json({
-      message: 'Failed to create provider'
-    })
+      res.status(500).json({
+        message: 'Failed to create provider'
+      })
+    }
   }
-})
+)
 
 
-app.put('/api/admin/providers/:id', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
-      })
-    }
+app.put(
+  '/api/admin/providers/:id',
+  authMiddleware,
+  async (req, res) => {
+    try {
 
-    const providerId = req.params.id
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
 
-    const {
-      name,
-      service_type,
-      contact_email,
-      phone,
-      location,
-      coverage,
-      status
-    } = req.body
-
-    if (
-      !name ||
-      !service_type ||
-      !contact_email ||
-      !phone ||
-      !location ||
-      !coverage
-    ) {
-      return res.status(400).json({
-        message: 'All provider fields are required'
-      })
-    }
-
-    if (!['Active', 'Inactive'].includes(status)) {
-      return res.status(400).json({
-        message: 'Invalid provider status'
-      })
-    }
-
-    const result = await pool.query(
-      `UPDATE providers
-       SET
-         name = $1,
-         service_type = $2,
-         contact_email = $3,
-         phone = $4,
-         location = $5,
-         coverage = $6,
-         status = $7
-       WHERE id = $8
-       RETURNING *`,
-      [
+      const {
         name,
         service_type,
         contact_email,
         phone,
         location,
         coverage,
-        status,
-        providerId
-      ]
-    )
+        status
+      } = req.body
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Provider not found'
+      const result = await pool.query(
+        `UPDATE providers
+         SET
+           name = $1,
+           service_type = $2,
+           contact_email = $3,
+           phone = $4,
+           location = $5,
+           coverage = $6,
+           status = $7
+         WHERE id = $8
+         RETURNING *`,
+        [
+          name,
+          service_type,
+          contact_email,
+          phone,
+          location,
+          coverage,
+          status,
+          req.params.id
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Provider not found'
+        })
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE PROVIDER ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update provider'
       })
     }
-
-    res.status(200).json({
-      message: 'Provider updated successfully',
-      provider: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE ADMIN PROVIDER ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to update provider'
-    })
   }
-})
+)
 
 
-app.delete('/api/admin/providers/:id', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+app.delete(
+  '/api/admin/providers/:id',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const result = await pool.query(
+        `DELETE FROM providers
+         WHERE id = $1
+         RETURNING *`,
+        [req.params.id]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Provider not found'
+        })
+      }
+
+      res.json({
+        message: 'Provider deleted successfully'
+      })
+
+    } catch (error) {
+      console.error('DELETE PROVIDER ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to delete provider'
       })
     }
-
-    const providerId = req.params.id
-
-    const result = await pool.query(
-      `DELETE FROM providers
-       WHERE id = $1
-       RETURNING *`,
-      [providerId]
-    )
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Provider not found'
-      })
-    }
-
-    res.status(200).json({
-      message: 'Provider deleted successfully',
-      provider: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('DELETE ADMIN PROVIDER ERROR:', error)
-
-    res.status(500).json({
-      message: 'Failed to delete provider'
-    })
   }
-})
+)
 
 
-app.get('/api/admin/settings', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+// =====================================================
+// ADMIN SETTINGS
+// =====================================================
+
+app.get(
+  '/api/admin/settings',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT *
+         FROM user_settings
+         WHERE user_id = $1`,
+        [req.user.id]
+      )
+
+      if (result.rows.length === 0) {
+        const created = await pool.query(
+          `INSERT INTO user_settings (user_id)
+           VALUES ($1)
+           RETURNING *`,
+          [req.user.id]
+        )
+
+        return res.json(created.rows[0])
+      }
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('ADMIN SETTINGS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to fetch admin settings'
       })
     }
+  }
+)
 
-    const result = await pool.query(
-      `SELECT
-        id,
+
+app.put(
+  '/api/admin/settings',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const {
         email_notifications,
         shipment_updates,
         payment_notifications,
         document_notifications,
         language,
         currency
-       FROM user_settings
-       WHERE user_id = $1`,
-      [req.user.id]
-    )
+      } = req.body
 
-    if (result.rows.length === 0) {
-      const newSettings = await pool.query(
-        `INSERT INTO user_settings (
+      const result = await pool.query(
+        `INSERT INTO user_settings
+        (
           user_id,
           email_notifications,
           shipment_updates,
           payment_notifications,
           document_notifications,
           language,
-          currency
+          currency,
+          updated_at
         )
-        VALUES ($1, TRUE, TRUE, TRUE, TRUE, 'English', 'USD')
-        RETURNING
-          id,
-          email_notifications,
-          shipment_updates,
-          payment_notifications,
-          document_notifications,
-          language,
-          currency`,
+        VALUES ($1,$2,$3,$4,$5,$6,$7,CURRENT_TIMESTAMP)
+
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+          email_notifications = EXCLUDED.email_notifications,
+          shipment_updates = EXCLUDED.shipment_updates,
+          payment_notifications = EXCLUDED.payment_notifications,
+          document_notifications = EXCLUDED.document_notifications,
+          language = EXCLUDED.language,
+          currency = EXCLUDED.currency,
+          updated_at = CURRENT_TIMESTAMP
+
+        RETURNING *`,
+        [
+          req.user.id,
+          email_notifications ?? true,
+          shipment_updates ?? true,
+          payment_notifications ?? true,
+          document_notifications ?? true,
+          language || 'English',
+          currency || 'USD'
+        ]
+      )
+
+      res.json(result.rows[0])
+
+    } catch (error) {
+      console.error('UPDATE ADMIN SETTINGS ERROR:', error)
+
+      res.status(500).json({
+        message: 'Failed to update admin settings'
+      })
+    }
+  }
+)
+
+
+// =====================================================
+// LOGISTICS PROVIDER - ASSIGNED SHIPMENTS
+// =====================================================
+
+app.get(
+  '/api/provider/shipments',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Logistics Provider') {
+        return res.status(403).json({
+          message: 'Logistics Provider access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT
+          s.*,
+          c.product_name,
+          c.category,
+          u.name AS owner_name,
+          u.email AS owner_email,
+          p.name AS provider_name
+
+         FROM shipments s
+
+         LEFT JOIN cargo c
+           ON s.cargo_id = c.id
+
+         INNER JOIN users u
+           ON s.user_id = u.id
+
+         INNER JOIN providers p
+           ON s.provider_id = p.id
+
+         WHERE p.user_id = $1
+
+         ORDER BY s.created_at DESC`,
         [req.user.id]
       )
 
-      return res.status(200).json(newSettings.rows[0])
-    }
+      res.json(result.rows)
 
-    return res.status(200).json(result.rows[0])
+    } catch (error) {
+      console.error('PROVIDER SHIPMENTS ERROR:', error)
 
-  } catch (error) {
-    console.error('GET ADMIN SETTINGS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to fetch admin settings'
-    })
-  }
-})
-
-
-app.put('/api/admin/settings', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Administrator') {
-      return res.status(403).json({
-        message: 'Administrator access required'
+      res.status(500).json({
+        message: 'Failed to fetch assigned shipments'
       })
     }
-
-    const {
-      email_notifications,
-      shipment_updates,
-      payment_notifications,
-      document_notifications,
-      language,
-      currency
-    } = req.body
-
-    const result = await pool.query(
-      `INSERT INTO user_settings (
-        user_id,
-        email_notifications,
-        shipment_updates,
-        payment_notifications,
-        document_notifications,
-        language,
-        currency,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-        email_notifications = EXCLUDED.email_notifications,
-        shipment_updates = EXCLUDED.shipment_updates,
-        payment_notifications = EXCLUDED.payment_notifications,
-        document_notifications = EXCLUDED.document_notifications,
-        language = EXCLUDED.language,
-        currency = EXCLUDED.currency,
-        updated_at = CURRENT_TIMESTAMP
-
-      RETURNING
-        id,
-        email_notifications,
-        shipment_updates,
-        payment_notifications,
-        document_notifications,
-        language,
-        currency`,
-      [
-        req.user.id,
-        email_notifications ?? true,
-        shipment_updates ?? true,
-        payment_notifications ?? true,
-        document_notifications ?? true,
-        language || 'English',
-        currency || 'USD'
-      ]
-    )
-
-    return res.status(200).json({
-      message: 'Admin settings updated successfully',
-      settings: result.rows[0]
-    })
-
-  } catch (error) {
-    console.error('UPDATE ADMIN SETTINGS ERROR:', error)
-
-    return res.status(500).json({
-      message: 'Failed to update admin settings'
-    })
   }
-})
-
-// ==========================================
-// LOGISTICS PROVIDER ROUTES
-// ==========================================
-
-// Get shipments assigned to the logged-in provider
-app.get('/api/provider/shipments', authMiddleware, async (req, res) => {
-  try {
-    if (req.user.role !== 'Logistics Provider') {
-      return res.status(403).json({
-        message: 'Logistics Provider access required'
-      })
-    }
-
-    const providerResult = await pool.query(
-      `SELECT id
-       FROM providers
-       WHERE user_id = $1
-       AND status = 'Active'`,
-      [req.user.id]
-    )
-
-    if (providerResult.rows.length === 0) {
-      return res.status(404).json({
-        message: 'Provider profile not found'
-      })
-    }
-
-    const providerId = providerResult.rows[0].id
-
-    const result = await pool.query(
-      `SELECT
-        s.id,
-        s.shipment_number,
-        s.origin,
-        s.destination,
-        s.shipping_method,
-        s.estimated_cost,
-        s.currency,
-        s.status,
-        s.pickup_date,
-        s.created_at,
-
-        s.cargo_id,
-
-        t.tracking_number,
-        t.current_location,
-        t.estimated_delivery,
-
-        p.name AS provider_name,
-        p.service_type AS provider_service_type,
-
-        c.product_name AS cargo_name,
-        c.category AS cargo_category,
-        c.quantity AS cargo_quantity,
-        c.weight AS cargo_weight,
-        c.number_of_packages
-
-       FROM shipments s
-
-       LEFT JOIN public.tracking t
-         ON s.id = t.shipment_id
-
-       LEFT JOIN providers p
-         ON s.provider_id = p.id
-
-       LEFT JOIN cargo c
-         ON s.cargo_id = c.id
-
-       WHERE s.provider_id = $1
-
-       ORDER BY s.id DESC`,
-      [providerId]
-    )
-
-    return res.status(200).json(result.rows)
-
-  } catch (error) {
-    console.error(
-      'GET PROVIDER SHIPMENTS ERROR:',
-      error
-    )
-
-    return res.status(500).json({
-      message: 'Failed to fetch assigned shipments'
-    })
-  }
-})
+)
 
 
-// Update shipment status for the logged-in provider
+// =====================================================
+// LOGISTICS PROVIDER - UPDATE SHIPMENT STATUS
+// =====================================================
+
 app.put(
   '/api/provider/shipments/:id/status',
   authMiddleware,
@@ -2628,91 +2177,44 @@ app.put(
         })
       }
 
-      const shipmentId = req.params.id
-      const { status } = req.body
+      const {
+        status
+      } = req.body
 
-      const allowedStatuses = [
-        'Pending',
-        'In Transit',
-        'Completed',
-        'Cancelled'
-      ]
-
-      if (!allowedStatuses.includes(status)) {
-        return res.status(400).json({
-          message: 'Invalid shipment status'
-        })
-      }
-
-
-      // Find provider linked to logged-in account
-      const providerResult = await pool.query(
-        `SELECT id
-         FROM providers
-         WHERE user_id = $1
-         AND status = 'Active'`,
-        [req.user.id]
-      )
-
-      if (providerResult.rows.length === 0) {
-        return res.status(404).json({
-          message: 'Provider profile not found'
-        })
-      }
-
-      const providerId = providerResult.rows[0].id
-
-
-      // Update only shipments assigned to this provider
       const result = await pool.query(
-        `UPDATE shipments
+        `UPDATE shipments s
+
          SET status = $1
-         WHERE id = $2
-         AND provider_id = $3
-         RETURNING *`,
+
+         FROM providers p
+
+         WHERE s.id = $2
+         AND s.provider_id = p.id
+         AND p.user_id = $3
+
+         RETURNING s.*`,
         [
           status,
-          shipmentId,
-          providerId
+          req.params.id,
+          req.user.id
         ]
       )
-
 
       if (result.rows.length === 0) {
         return res.status(404).json({
-          message:
-            'Shipment not found or not assigned to this provider'
+          message: 'Assigned shipment not found'
         })
       }
 
-
-      // Keep tracking status synchronized
-      await pool.query(
-        `UPDATE public.tracking
-         SET
-           status = $1,
-           last_updated = CURRENT_TIMESTAMP
-         WHERE shipment_id = $2`,
-        [
-          status,
-          shipmentId
-        ]
-      )
-
-
-      return res.status(200).json({
-        message: 'Shipment status updated successfully',
-        shipment: result.rows[0]
-      })
+      res.json(result.rows[0])
 
     } catch (error) {
-
       console.error(
-        'UPDATE PROVIDER SHIPMENT STATUS ERROR:',
+        'PROVIDER UPDATE STATUS ERROR:',
         error
       )
 
-      return res.status(500).json({
+      res.status(500).json({
         message: 'Failed to update shipment status'
       })
     }
@@ -2720,7 +2222,10 @@ app.put(
 )
 
 
-// Get the logged-in provider profile
+// =====================================================
+// LOGISTICS PROVIDER - PROFILE
+// =====================================================
+
 app.get(
   '/api/provider/profile',
   authMiddleware,
@@ -2777,94 +2282,13 @@ app.get(
   }
 )
 
-// ==========================================
-// ADMIN SHIPMENT PROVIDER ASSIGNMENT
-// ==========================================
 
-app.put(
-  '/api/admin/shipments/:id/provider',
-  authMiddleware,
-  async (req, res) => {
-    try {
-      if (req.user.role !== 'Administrator') {
-        return res.status(403).json({
-          message: 'Administrator access required'
-        })
-      }
-
-      const shipmentId = req.params.id
-      const { provider_id } = req.body
-
-      if (!provider_id) {
-        return res.status(400).json({
-          message: 'Provider ID is required'
-        })
-      }
-
-      // Check provider
-      const providerResult = await pool.query(
-        `SELECT id, name, status
-         FROM providers
-         WHERE id = $1`,
-        [provider_id]
-      )
-
-      if (providerResult.rows.length === 0) {
-        return res.status(404).json({
-          message: 'Provider not found'
-        })
-      }
-
-      if (providerResult.rows[0].status !== 'Active') {
-        return res.status(400).json({
-          message: 'Selected provider is inactive'
-        })
-      }
-
-      // Assign provider to shipment
-      const result = await pool.query(
-        `UPDATE shipments
-         SET provider_id = $1
-         WHERE id = $2
-         RETURNING *`,
-        [
-          provider_id,
-          shipmentId
-        ]
-      )
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          message: 'Shipment not found'
-        })
-      }
-
-      return res.status(200).json({
-        message: 'Provider assigned successfully',
-        shipment: result.rows[0],
-        provider: providerResult.rows[0]
-      })
-
-    } catch (error) {
-
-      console.error(
-        'ASSIGN SHIPMENT PROVIDER ERROR:',
-        error
-      )
-
-      return res.status(500).json({
-        message: 'Failed to assign provider'
-      })
-    }
-  }
-)
-
-// ==============================
+// =====================================================
 // START SERVER
-// ==============================
+// =====================================================
 
 app.listen(PORT, () => {
   console.log(
-    `Smart Cargo backend running on https://smart-cargo.onrender.com:${PORT}`
+    `Smart Cargo backend running on port ${PORT}`
   )
 })
