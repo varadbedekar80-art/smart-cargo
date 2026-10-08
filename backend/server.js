@@ -1966,6 +1966,111 @@ app.get('/api/invoices', authMiddleware, async (req, res) => {
   }
 })
 
+app.get('/api/admin/documents', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const result = await pool.query(
+      `SELECT
+        d.id,
+        d.document_name,
+        d.document_type,
+        d.file_path,
+        d.status,
+        d.uploaded_at,
+
+        s.shipment_number,
+        s.origin,
+        s.destination,
+
+        u.name AS owner_name,
+        u.email AS owner_email,
+
+        bp.business_name
+
+       FROM documents d
+
+       LEFT JOIN shipments s
+         ON d.shipment_id = s.id
+
+       INNER JOIN users u
+         ON d.user_id = u.id
+
+       LEFT JOIN business_profiles bp
+         ON d.user_id = bp.user_id
+
+       ORDER BY d.id DESC`
+    )
+
+    return res.status(200).json(result.rows)
+
+  } catch (error) {
+    console.error('GET ADMIN DOCUMENTS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to fetch admin documents'
+    })
+  }
+})
+
+
+app.put('/api/admin/documents/:id/status', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const documentId = req.params.id
+    const { status } = req.body
+
+    const allowedStatuses = [
+      'Pending',
+      'Approved',
+      'Rejected'
+    ]
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid document status'
+      })
+    }
+
+    const result = await pool.query(
+      `UPDATE documents
+       SET status = $1
+       WHERE id = $2
+       RETURNING *`,
+      [
+        status,
+        documentId
+      ]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Document not found'
+      })
+    }
+
+    return res.status(200).json({
+      message: 'Document status updated successfully',
+      document: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('UPDATE ADMIN DOCUMENT STATUS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to update document status'
+    })
+  }
+})
 
 // ==============================
 // START SERVER
