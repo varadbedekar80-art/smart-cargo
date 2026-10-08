@@ -56,18 +56,127 @@ app.get('/api/health', async (req, res) => {
 // GET ALL USERS
 // ==============================
 
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', authMiddleware, async (req, res) => {
   try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
     const result = await pool.query(
-      'SELECT id, name, email, role, status, created_at FROM users ORDER BY id DESC'
+      `SELECT id, name, email, role, status, created_at
+       FROM users
+       ORDER BY id DESC`
     )
 
     res.json(result.rows)
+
   } catch (error) {
-    console.error(error)
+    console.error('GET USERS ERROR:', error)
 
     res.status(500).json({
       message: 'Failed to fetch users'
+    })
+  }
+})
+
+
+// ==============================
+// UPDATE USER STATUS
+// ==============================
+
+app.put('/api/users/:id/status', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const userId = req.params.id
+    const { status } = req.body
+
+    if (!['Active', 'Inactive'].includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid status'
+      })
+    }
+
+    if (String(userId) === String(req.user.id)) {
+      return res.status(400).json({
+        message: 'You cannot change your own account status'
+      })
+    }
+
+    const result = await pool.query(
+      `UPDATE users
+       SET status = $1
+       WHERE id = $2
+       RETURNING id, name, email, role, status`,
+      [status, userId]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: 'User not found'
+      })
+    }
+
+    res.json({
+      message: 'User status updated successfully',
+      user: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error('UPDATE USER STATUS ERROR:', error)
+
+    res.status(500).json({
+      message: 'Failed to update user status'
+    })
+  }
+})
+
+
+// ==============================
+// ADMIN BUSINESS MANAGEMENT
+// ==============================
+
+app.get('/api/admin/businesses', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const result = await pool.query(
+      `SELECT
+        bp.id,
+        bp.user_id,
+        bp.business_name,
+        bp.phone,
+        bp.business_type,
+        bp.registration_number,
+        bp.address,
+        bp.city,
+        bp.country,
+        u.name AS owner_name,
+        u.email AS owner_email,
+        u.status
+       FROM business_profiles bp
+       INNER JOIN users u
+         ON bp.user_id = u.id
+       ORDER BY bp.id DESC`
+    )
+
+    return res.status(200).json(result.rows)
+
+  } catch (error) {
+    console.error('GET ADMIN BUSINESSES ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to fetch businesses'
     })
   }
 })
@@ -113,6 +222,7 @@ app.post('/api/register', async (req, res) => {
       message: 'User registered successfully',
       user: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -190,6 +300,7 @@ app.post('/api/login', async (req, res) => {
         status: user.status
       }
     })
+
   } catch (error) {
     console.error(error)
 
@@ -223,6 +334,7 @@ app.get('/api/me', authMiddleware, async (req, res) => {
       message: 'Authenticated user',
       user: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -254,7 +366,6 @@ app.get('/api/settings', authMiddleware, async (req, res) => {
       [req.user.id]
     )
 
-    // Create default settings if none exist
     if (result.rows.length === 0) {
       const defaultResult = await pool.query(
         `INSERT INTO user_settings (
@@ -484,6 +595,7 @@ app.get('/api/cargo', authMiddleware, async (req, res) => {
     )
 
     res.json(result.rows)
+
   } catch (error) {
     console.error(error)
 
@@ -558,6 +670,7 @@ app.post('/api/cargo', authMiddleware, async (req, res) => {
       message: 'Cargo added successfully',
       cargo: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -593,6 +706,7 @@ app.delete('/api/cargo/:id', authMiddleware, async (req, res) => {
       message: 'Cargo deleted successfully',
       cargo: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -658,7 +772,6 @@ app.post('/api/shipments', authMiddleware, async (req, res) => {
       pickup_date
     } = req.body
 
-    // Validate required fields
     if (
       !origin ||
       !destination ||
@@ -669,7 +782,6 @@ app.post('/api/shipments', authMiddleware, async (req, res) => {
       })
     }
 
-    // Check selected provider
     if (provider_id) {
       const providerCheck = await client.query(
         `SELECT id
@@ -686,13 +798,10 @@ app.post('/api/shipments', authMiddleware, async (req, res) => {
       }
     }
 
-    // Start transaction
     await client.query('BEGIN')
 
-    // Generate shipment number
     const shipmentNumber = `SC-${Date.now()}`
 
-    // Create shipment
     const shipmentResult = await client.query(
       `INSERT INTO shipments (
         user_id,
@@ -724,10 +833,6 @@ app.post('/api/shipments', authMiddleware, async (req, res) => {
 
     const shipment = shipmentResult.rows[0]
 
-    // ==============================
-    // CREATE TRACKING AUTOMATICALLY
-    // ==============================
-
     const trackingNumber = `TRK-${Date.now()}`
 
     const trackingResult = await client.query(
@@ -751,10 +856,8 @@ app.post('/api/shipments', authMiddleware, async (req, res) => {
 
     const tracking = trackingResult.rows[0]
 
-    // Complete transaction
     await client.query('COMMIT')
 
-    // Send shipment + tracking to frontend
     res.status(201).json({
       message: 'Shipment and tracking created successfully',
       shipment,
@@ -893,6 +996,7 @@ app.get('/api/providers', authMiddleware, async (req, res) => {
   }
 })
 
+
 // ==============================
 // ADD PROVIDER
 // ==============================
@@ -939,6 +1043,7 @@ app.post('/api/providers', authMiddleware, async (req, res) => {
       message: 'Provider added successfully',
       provider: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -1001,6 +1106,7 @@ app.put('/api/providers/:id', authMiddleware, async (req, res) => {
       message: 'Provider updated successfully',
       provider: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -1036,6 +1142,7 @@ app.delete('/api/providers/:id', authMiddleware, async (req, res) => {
       message: 'Provider deleted successfully',
       provider: result.rows[0]
     })
+
   } catch (error) {
     console.error(error)
 
@@ -1056,7 +1163,7 @@ app.post('/api/cost-estimate', authMiddleware, async (req, res) => {
       weight,
       shipping_method,
       origin,
-      destination,
+      destination
     } = req.body
 
     if (!weight || !shipping_method || !origin || !destination) {
@@ -1073,7 +1180,6 @@ app.post('/api/cost-estimate', authMiddleware, async (req, res) => {
       })
     }
 
-    // Simple academic cost-estimation logic
     let ratePerKg = 0
 
     if (shipping_method === 'Air') {
@@ -1090,7 +1196,6 @@ app.post('/api/cost-estimate', authMiddleware, async (req, res) => {
 
     const baseCost = weightValue * ratePerKg
 
-    // Academic distance/location adjustment
     let locationCharge = 0
 
     if (
@@ -1178,7 +1283,6 @@ app.post('/api/documents', authMiddleware, async (req, res) => {
       })
     }
 
-    // Check shipment belongs to logged-in user
     if (shipment_id) {
       const shipmentCheck = await pool.query(
         `SELECT id
@@ -1371,7 +1475,6 @@ app.post('/api/payments', authMiddleware, async (req, res) => {
       })
     }
 
-    // Check shipment belongs to logged-in user
     if (shipment_id) {
       const shipmentCheck = await client.query(
         `SELECT id
@@ -1391,13 +1494,10 @@ app.post('/api/payments', authMiddleware, async (req, res) => {
       }
     }
 
-    // Start transaction
     await client.query('BEGIN')
 
-    // Generate unique payment reference
     const paymentReference = `PAY-${Date.now()}`
 
-    // Create payment
     const paymentResult = await client.query(
       `INSERT INTO payments (
         user_id,
@@ -1423,10 +1523,8 @@ app.post('/api/payments', authMiddleware, async (req, res) => {
 
     const payment = paymentResult.rows[0]
 
-    // Generate unique invoice number
     const invoiceNumber = `INV-${Date.now()}`
 
-    // Create invoice automatically
     const invoiceResult = await client.query(
       `INSERT INTO invoices (
         user_id,
@@ -1452,7 +1550,6 @@ app.post('/api/payments', authMiddleware, async (req, res) => {
 
     const invoice = invoiceResult.rows[0]
 
-    // Complete transaction
     await client.query('COMMIT')
 
     res.status(201).json({
@@ -1515,8 +1612,7 @@ app.get('/api/tracking', authMiddleware, async (req, res) => {
 
 
 // CREATE TRACKING
-// This route is still available for manual tracking creation.
-// Normal shipment creation now creates tracking automatically.
+// Normal shipment creation already creates tracking automatically.
 
 app.post('/api/tracking', authMiddleware, async (req, res) => {
   try {
