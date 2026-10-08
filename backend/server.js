@@ -717,6 +717,129 @@ app.delete('/api/cargo/:id', authMiddleware, async (req, res) => {
 })
 
 
+app.get('/api/admin/shipments', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const result = await pool.query(
+      `SELECT
+        s.id,
+        s.shipment_number,
+        s.origin,
+        s.destination,
+        s.shipping_method,
+        s.estimated_cost,
+        s.currency,
+        s.status,
+        s.pickup_date,
+        s.created_at,
+
+        t.tracking_number,
+
+        c.product_name AS cargo_name,
+
+        bp.business_name,
+
+        u.name AS owner_name,
+        u.email AS owner_email,
+
+        p.name AS provider_name
+
+       FROM shipments s
+
+       LEFT JOIN public.tracking t
+         ON s.id = t.shipment_id
+
+       LEFT JOIN cargo c
+         ON s.cargo_id = c.id
+
+       LEFT JOIN business_profiles bp
+         ON s.user_id = bp.user_id
+
+       INNER JOIN users u
+         ON s.user_id = u.id
+
+       LEFT JOIN providers p
+         ON s.provider_id = p.id
+
+       ORDER BY s.id DESC`
+    )
+
+    return res.status(200).json(result.rows)
+
+  } catch (error) {
+    console.error('GET ADMIN SHIPMENTS ERROR:', error)
+
+    return res.status(500).json({
+      message: 'Failed to fetch admin shipments'
+    })
+  }
+})
+
+
+app.put('/api/admin/shipments/:id/status', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Administrator') {
+      return res.status(403).json({
+        message: 'Administrator access required'
+      })
+    }
+
+    const shipmentId = req.params.id
+    const { status } = req.body
+
+    const allowedStatuses = [
+      'Pending',
+      'In Transit',
+      'Completed',
+      'Cancelled'
+    ]
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        message: 'Invalid shipment status'
+      })
+    }
+
+    const result = await pool.query(
+      `UPDATE shipments
+       SET status = $1
+       WHERE id = $2
+       RETURNING *`,
+      [
+        status,
+        shipmentId
+      ]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Shipment not found'
+      })
+    }
+
+    return res.status(200).json({
+      message: 'Shipment status updated successfully',
+      shipment: result.rows[0]
+    })
+
+  } catch (error) {
+    console.error(
+      'UPDATE ADMIN SHIPMENT STATUS ERROR:',
+      error
+    )
+
+    return res.status(500).json({
+      message: 'Failed to update shipment status'
+    })
+  }
+}) 
+
+
 // ==============================
 // GET USER SHIPMENTS
 // WITH PROVIDER + TRACKING DETAILS
