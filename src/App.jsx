@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+
 import CostEstimator from './pages/CostEstimator'
 import Cargo from './pages/Cargo'
 import Shipments from './pages/Shipments'
@@ -14,6 +15,7 @@ import Settings from './pages/Settings'
 
 import Home from './pages/Home'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import About from './pages/About'
 import Services from './pages/Services'
 import HowItWorks from './pages/HowItWorks'
@@ -55,6 +57,8 @@ function App() {
 
   const [showLogin, setShowLogin] = useState(false)
 
+  const [showRegister, setShowRegister] = useState(false)
+
   const [publicPage, setPublicPage] = useState('Home')
 
   const [activePage, setActivePage] = useState('Dashboard')
@@ -64,6 +68,7 @@ function App() {
     setUserRole(role)
     setIsLoggedIn(true)
     setShowLogin(false)
+    setShowRegister(false)
     setActivePage('Dashboard')
   }
 
@@ -74,6 +79,7 @@ function App() {
 
     setIsLoggedIn(false)
     setShowLogin(false)
+    setShowRegister(false)
     setUserRole('Business User')
     setActivePage('Dashboard')
   }
@@ -131,64 +137,156 @@ function App() {
 
   if (!isLoggedIn) {
 
+    /*
+    ==========================================
+    LOGIN PAGE
+    ==========================================
+    */
+
     if (showLogin) {
       return (
         <Login
           onLogin={handleLogin}
           onBack={() => setShowLogin(false)}
+          onRegister={() => {
+            setShowLogin(false)
+            setShowRegister(true)
+          }}
         />
       )
     }
 
+
+    /*
+    ==========================================
+    REGISTER PAGE
+    ==========================================
+    */
+
+    if (showRegister) {
+      return (
+        <Register
+          onBack={() => {
+            setShowRegister(false)
+            setShowLogin(true)
+          }}
+          onRegisterSuccess={() => {
+            setShowRegister(false)
+            setShowLogin(true)
+          }}
+        />
+      )
+    }
+
+
+    /*
+    ==========================================
+    ABOUT
+    ==========================================
+    */
 
     if (publicPage === 'About') {
       return (
         <About
-          onLogin={() => setShowLogin(true)}
-          onRegister={() => setShowLogin(true)}
+          onLogin={() => {
+            setShowRegister(false)
+            setShowLogin(true)
+          }}
+          onRegister={() => {
+            setShowLogin(false)
+            setShowRegister(true)
+          }}
           onNavigate={setPublicPage}
         />
       )
     }
 
+
+    /*
+    ==========================================
+    SERVICES
+    ==========================================
+    */
 
     if (publicPage === 'Services') {
       return (
         <Services
-          onLogin={() => setShowLogin(true)}
-          onRegister={() => setShowLogin(true)}
+          onLogin={() => {
+            setShowRegister(false)
+            setShowLogin(true)
+          }}
+          onRegister={() => {
+            setShowLogin(false)
+            setShowRegister(true)
+          }}
           onNavigate={setPublicPage}
         />
       )
     }
 
+
+    /*
+    ==========================================
+    HOW IT WORKS
+    ==========================================
+    */
 
     if (publicPage === 'How It Works') {
       return (
         <HowItWorks
-          onLogin={() => setShowLogin(true)}
-          onRegister={() => setShowLogin(true)}
+          onLogin={() => {
+            setShowRegister(false)
+            setShowLogin(true)
+          }}
+          onRegister={() => {
+            setShowLogin(false)
+            setShowRegister(true)
+          }}
           onNavigate={setPublicPage}
         />
       )
     }
 
+
+    /*
+    ==========================================
+    CONTACT
+    ==========================================
+    */
 
     if (publicPage === 'Contact') {
       return (
         <Contact
-          onLogin={() => setShowLogin(true)}
-          onRegister={() => setShowLogin(true)}
+          onLogin={() => {
+            setShowRegister(false)
+            setShowLogin(true)
+          }}
+          onRegister={() => {
+            setShowLogin(false)
+            setShowRegister(true)
+          }}
           onNavigate={setPublicPage}
         />
       )
     }
 
 
+    /*
+    ==========================================
+    HOME
+    ==========================================
+    */
+
     return (
       <Home
-        onLogin={() => setShowLogin(true)}
-        onRegister={() => setShowLogin(true)}
+        onLogin={() => {
+          setShowRegister(false)
+          setShowLogin(true)
+        }}
+        onRegister={() => {
+          setShowLogin(false)
+          setShowRegister(true)
+        }}
         onNavigate={setPublicPage}
       />
     )
@@ -204,13 +302,11 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800">
 
-
       {/* ==========================================
           SIDEBAR
       ========================================== */}
 
       <aside className="fixed left-0 top-0 h-screen w-64 bg-slate-900 text-white p-5 overflow-y-auto">
-
 
         {/* Sidebar Logo */}
 

@@ -2526,6 +2526,339 @@ app.put('/api/admin/settings', authMiddleware, async (req, res) => {
   }
 })
 
+// ==========================================
+// LOGISTICS PROVIDER ROUTES
+// ==========================================
+
+// Get shipments assigned to the logged-in provider
+app.get('/api/provider/shipments', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'Logistics Provider') {
+      return res.status(403).json({
+        message: 'Logistics Provider access required'
+      })
+    }
+
+    const providerResult = await pool.query(
+      `SELECT id
+       FROM providers
+       WHERE user_id = $1
+       AND status = 'Active'`,
+      [req.user.id]
+    )
+
+    if (providerResult.rows.length === 0) {
+      return res.status(404).json({
+        message: 'Provider profile not found'
+      })
+    }
+
+    const providerId = providerResult.rows[0].id
+
+    const result = await pool.query(
+      `SELECT
+        s.id,
+        s.shipment_number,
+        s.origin,
+        s.destination,
+        s.shipping_method,
+        s.estimated_cost,
+        s.currency,
+        s.status,
+        s.pickup_date,
+        s.created_at,
+
+        s.cargo_id,
+
+        t.tracking_number,
+        t.current_location,
+        t.estimated_delivery,
+
+        p.name AS provider_name,
+        p.service_type AS provider_service_type,
+
+        c.product_name AS cargo_name,
+        c.category AS cargo_category,
+        c.quantity AS cargo_quantity,
+        c.weight AS cargo_weight,
+        c.number_of_packages
+
+       FROM shipments s
+
+       LEFT JOIN public.tracking t
+         ON s.id = t.shipment_id
+
+       LEFT JOIN providers p
+         ON s.provider_id = p.id
+
+       LEFT JOIN cargo c
+         ON s.cargo_id = c.id
+
+       WHERE s.provider_id = $1
+
+       ORDER BY s.id DESC`,
+      [providerId]
+    )
+
+    return res.status(200).json(result.rows)
+
+  } catch (error) {
+    console.error(
+      'GET PROVIDER SHIPMENTS ERROR:',
+      error
+    )
+
+    return res.status(500).json({
+      message: 'Failed to fetch assigned shipments'
+    })
+  }
+})
+
+
+// Update shipment status for the logged-in provider
+app.put(
+  '/api/provider/shipments/:id/status',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Logistics Provider') {
+        return res.status(403).json({
+          message: 'Logistics Provider access required'
+        })
+      }
+
+      const shipmentId = req.params.id
+      const { status } = req.body
+
+      const allowedStatuses = [
+        'Pending',
+        'In Transit',
+        'Completed',
+        'Cancelled'
+      ]
+
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({
+          message: 'Invalid shipment status'
+        })
+      }
+
+
+      // Find provider linked to logged-in account
+      const providerResult = await pool.query(
+        `SELECT id
+         FROM providers
+         WHERE user_id = $1
+         AND status = 'Active'`,
+        [req.user.id]
+      )
+
+      if (providerResult.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Provider profile not found'
+        })
+      }
+
+      const providerId = providerResult.rows[0].id
+
+
+      // Update only shipments assigned to this provider
+      const result = await pool.query(
+        `UPDATE shipments
+         SET status = $1
+         WHERE id = $2
+         AND provider_id = $3
+         RETURNING *`,
+        [
+          status,
+          shipmentId,
+          providerId
+        ]
+      )
+
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message:
+            'Shipment not found or not assigned to this provider'
+        })
+      }
+
+
+      // Keep tracking status synchronized
+      await pool.query(
+        `UPDATE public.tracking
+         SET
+           status = $1,
+           last_updated = CURRENT_TIMESTAMP
+         WHERE shipment_id = $2`,
+        [
+          status,
+          shipmentId
+        ]
+      )
+
+
+      return res.status(200).json({
+        message: 'Shipment status updated successfully',
+        shipment: result.rows[0]
+      })
+
+    } catch (error) {
+
+      console.error(
+        'UPDATE PROVIDER SHIPMENT STATUS ERROR:',
+        error
+      )
+
+      return res.status(500).json({
+        message: 'Failed to update shipment status'
+      })
+    }
+  }
+)
+
+
+// Get the logged-in provider profile
+app.get(
+  '/api/provider/profile',
+  authMiddleware,
+  async (req, res) => {
+    try {
+
+      if (req.user.role !== 'Logistics Provider') {
+        return res.status(403).json({
+          message: 'Logistics Provider access required'
+        })
+      }
+
+      const result = await pool.query(
+        `SELECT
+          p.id,
+          p.name,
+          p.service_type,
+          p.contact_email,
+          p.phone,
+          p.location,
+          p.coverage,
+          p.status,
+          u.name AS account_name,
+          u.email AS account_email
+
+         FROM providers p
+
+         INNER JOIN users u
+           ON p.user_id = u.id
+
+         WHERE p.user_id = $1`,
+        [req.user.id]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Provider profile not found'
+        })
+      }
+
+      return res.status(200).json(result.rows[0])
+
+    } catch (error) {
+
+      console.error(
+        'GET PROVIDER PROFILE ERROR:',
+        error
+      )
+
+      return res.status(500).json({
+        message: 'Failed to fetch provider profile'
+      })
+    }
+  }
+)
+
+// ==========================================
+// ADMIN SHIPMENT PROVIDER ASSIGNMENT
+// ==========================================
+
+app.put(
+  '/api/admin/shipments/:id/provider',
+  authMiddleware,
+  async (req, res) => {
+    try {
+      if (req.user.role !== 'Administrator') {
+        return res.status(403).json({
+          message: 'Administrator access required'
+        })
+      }
+
+      const shipmentId = req.params.id
+      const { provider_id } = req.body
+
+      if (!provider_id) {
+        return res.status(400).json({
+          message: 'Provider ID is required'
+        })
+      }
+
+      // Check provider
+      const providerResult = await pool.query(
+        `SELECT id, name, status
+         FROM providers
+         WHERE id = $1`,
+        [provider_id]
+      )
+
+      if (providerResult.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Provider not found'
+        })
+      }
+
+      if (providerResult.rows[0].status !== 'Active') {
+        return res.status(400).json({
+          message: 'Selected provider is inactive'
+        })
+      }
+
+      // Assign provider to shipment
+      const result = await pool.query(
+        `UPDATE shipments
+         SET provider_id = $1
+         WHERE id = $2
+         RETURNING *`,
+        [
+          provider_id,
+          shipmentId
+        ]
+      )
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({
+          message: 'Shipment not found'
+        })
+      }
+
+      return res.status(200).json({
+        message: 'Provider assigned successfully',
+        shipment: result.rows[0],
+        provider: providerResult.rows[0]
+      })
+
+    } catch (error) {
+
+      console.error(
+        'ASSIGN SHIPMENT PROVIDER ERROR:',
+        error
+      )
+
+      return res.status(500).json({
+        message: 'Failed to assign provider'
+      })
+    }
+  }
+)
+
 // ==============================
 // START SERVER
 // ==============================

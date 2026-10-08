@@ -1,18 +1,28 @@
 import { useState } from 'react'
 
-function Login({ onLogin, onBack, onRegister }) {
+function Register({ onBack, onRegisterSuccess }) {
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState('Business User')
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
     setError('')
+    setSuccess('')
 
-    if (!email || !password) {
-      setError('Please enter email and password.')
+    if (!name || !email || !password) {
+      setError('Please fill in all required fields.')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
       return
     }
 
@@ -20,15 +30,17 @@ function Login({ onLogin, onBack, onRegister }) {
       setLoading(true)
 
       const response = await fetch(
-        'https://smart-cargo.onrender.com/api/login',
+        'https://smart-cargo.onrender.com/api/register',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            name,
             email,
             password,
+            role,
           }),
         }
       )
@@ -36,22 +48,28 @@ function Login({ onLogin, onBack, onRegister }) {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.message || 'Login failed.')
+        setError(data.message || 'Registration failed.')
         return
       }
 
-      // Store authentication information
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
+      setSuccess(
+        'Account created successfully. You can now login.'
+      )
 
-      // Send the real role returned by the backend to App.jsx
-      onLogin(data.user.role)
+      setName('')
+      setEmail('')
+      setPassword('')
+      setRole('Business User')
+
+      setTimeout(() => {
+        onRegisterSuccess()
+      }, 1500)
 
     } catch (error) {
       console.error(error)
 
       setError(
-        'Unable to connect to the backend. Make sure the backend server is running.'
+        'Unable to connect to the backend. Please try again.'
       )
     } finally {
       setLoading(false)
@@ -91,14 +109,15 @@ function Login({ onLogin, onBack, onRegister }) {
             onClick={onBack}
             className="text-sm font-medium text-slate-600 hover:text-blue-600"
           >
-            ← Back to Website
+            ← Back to Login
           </button>
 
         </div>
 
       </nav>
 
-      {/* Login Section */}
+
+      {/* Registration Section */}
       <div className="flex min-h-[calc(100vh-73px)] items-center justify-center px-6 py-12">
 
         <div className="w-full max-w-md">
@@ -113,19 +132,38 @@ function Login({ onLogin, onBack, onRegister }) {
               </div>
 
               <h1 className="mt-5 text-2xl font-bold text-slate-800">
-                Welcome Back
+                Create Account
               </h1>
 
               <p className="mt-2 text-sm text-slate-500">
-                Login to your Smart Cargo account
+                Create your Smart Cargo account
               </p>
 
             </div>
+
 
             <form
               onSubmit={handleSubmit}
               className="mt-8 space-y-5"
             >
+
+              {/* Name */}
+              <div>
+
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Full Name
+                </label>
+
+                <input
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                />
+
+              </div>
+
 
               {/* Email */}
               <div>
@@ -144,26 +182,13 @@ function Login({ onLogin, onBack, onRegister }) {
 
               </div>
 
+
               {/* Password */}
               <div>
 
-                <div className="mb-2 flex justify-between">
-
-                  <label className="block text-sm font-medium text-slate-700">
-                    Password
-                  </label>
-
-                  <button
-                    type="button"
-                    className="text-sm text-blue-600 hover:underline"
-                    onClick={() =>
-                      alert('Password recovery will be connected later.')
-                    }
-                  >
-                    Forgot Password?
-                  </button>
-
-                </div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Password
+                </label>
 
                 <input
                   type="password"
@@ -173,47 +198,85 @@ function Login({ onLogin, onBack, onRegister }) {
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
                 />
 
+                <p className="mt-1 text-xs text-slate-400">
+                  Minimum 6 characters
+                </p>
+
               </div>
 
-              {/* Error Message */}
+
+              {/* Role */}
+              <div>
+
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Account Type
+                </label>
+
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+                >
+
+                  <option value="Business User">
+                    Business User
+                  </option>
+
+                  <option value="Logistics Provider">
+                    Logistics Provider
+                  </option>
+
+                </select>
+
+              </div>
+
+
+              {/* Error */}
               {error && (
                 <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
                   {error}
                 </div>
               )}
 
-              {/* Login */}
+
+              {/* Success */}
+              {success && (
+                <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+                  {success}
+                </div>
+              )}
+
+
+              {/* Register Button */}
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
               >
-                {loading ? 'Logging in...' : 'Login'}
+                {loading
+                  ? 'Creating Account...'
+                  : 'Create Account'}
               </button>
 
             </form>
 
-            {/* Backend Notice */}
-            <div className="mt-6 rounded-lg bg-green-50 p-4 text-center text-sm text-green-700">
-              Connected to Smart Cargo backend
-            </div>
+
+            {/* Login */}
+            <p className="mt-6 text-center text-sm text-slate-500">
+
+              Already have an account?{' '}
+
+              <button
+                type="button"
+                onClick={onBack}
+                className="font-medium text-blue-600 hover:underline"
+              >
+                Login
+              </button>
+
+            </p>
 
           </div>
-
-          {/* Register */}
-          <p className="mt-6 text-center text-sm text-slate-500">
-
-            Don't have an account?{' '}
-
-            <button
-              type="button"
-              onClick={onRegister}
-              className="font-medium text-blue-600 hover:underline"
-            >
-              Create an account
-            </button>
-
-          </p>
 
         </div>
 
@@ -223,6 +286,4 @@ function Login({ onLogin, onBack, onRegister }) {
   )
 }
 
-export default Login
-
-
+export default Register

@@ -1,192 +1,254 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function AssignedShipments() {
-  const [shipments, setShipments] = useState([
-    {
-      id: 1,
-      tracking: 'SC-10024',
-      cargo: 'Electronic Components',
-      business: 'ABC Electronics Pvt. Ltd.',
-      route: 'Mumbai → Dubai',
-      method: 'Air',
-      status: 'In Transit',
-      cost: '$2,450',
-    },
-    {
-      id: 2,
-      tracking: 'SC-10021',
-      cargo: 'Automobile Parts',
-      business: 'Metro Auto Exports',
-      route: 'Mumbai → Hamburg',
-      method: 'Sea',
-      status: 'Pickup Pending',
-      cost: '$2,780',
-    },
-    {
-      id: 3,
-      tracking: 'SC-10018',
-      cargo: 'Textile Products',
-      business: 'Cotton Exporters Ltd.',
-      route: 'Pune → Singapore',
-      method: 'Sea',
-      status: 'Delivered',
-      cost: '$1,950',
-    },
-  ])
+  const [shipments, setShipments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const getStatusStyle = (status) => {
-    if (status === 'Delivered') {
-      return 'bg-green-100 text-green-700'
+  useEffect(() => {
+    fetchShipments()
+  }, [])
+
+  const fetchShipments = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'https://smart-cargo.onrender.com/api/provider/shipments',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to fetch assigned shipments'
+        )
+      }
+
+      setShipments(data)
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
     }
-
-    if (status === 'In Transit') {
-      return 'bg-blue-100 text-blue-700'
-    }
-
-    return 'bg-yellow-100 text-yellow-700'
   }
 
   return (
     <div>
+
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">
+
+        <h1 className="text-2xl font-bold text-slate-800">
           Assigned Shipments
         </h1>
 
-        <p className="mt-2 text-slate-500">
-          View and manage shipments assigned to your logistics company.
+        <p className="mt-1 text-sm text-slate-500">
+          View shipments assigned to your logistics operation.
         </p>
+
       </div>
 
-      {/* Summary */}
-      <div className="mb-6 grid gap-5 md:grid-cols-3">
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Total Assigned
-          </p>
 
-          <p className="mt-2 text-3xl font-bold text-slate-800">
-            {shipments.length}
-          </p>
+      {/* Error */}
+      {error && (
+        <div className="mb-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+
+      {/* Loading */}
+      {loading ? (
+
+        <div className="rounded-xl bg-white p-10 text-center shadow-sm text-slate-500">
+          Loading assigned shipments...
         </div>
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
-            In Transit
-          </p>
+      ) : shipments.length === 0 ? (
 
-          <p className="mt-2 text-3xl font-bold text-blue-600">
-            {
-              shipments.filter(
-                (shipment) => shipment.status === 'In Transit'
-              ).length
-            }
-          </p>
-        </div>
+        <div className="rounded-xl bg-white p-10 text-center shadow-sm">
 
-        <div className="rounded-xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">
-            Delivered
-          </p>
+          <div className="text-4xl">
+            🚚
+          </div>
 
-          <p className="mt-2 text-3xl font-bold text-green-600">
-            {
-              shipments.filter(
-                (shipment) => shipment.status === 'Delivered'
-              ).length
-            }
-          </p>
-        </div>
-      </div>
-
-      {/* Shipments Table */}
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm">
-        <div className="border-b px-6 py-5">
-          <h2 className="text-xl font-semibold text-slate-800">
-            My Assigned Shipments
+          <h2 className="mt-4 text-lg font-semibold text-slate-800">
+            No Assigned Shipments
           </h2>
+
+          <p className="mt-2 text-sm text-slate-500">
+            There are currently no shipments assigned to you.
+          </p>
+
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Tracking ID
-                </th>
+      ) : (
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Cargo
-                </th>
+        <div className="rounded-xl bg-white shadow-sm">
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Business
-                </th>
+          <div className="border-b border-slate-200 p-6">
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Route
-                </th>
+            <h2 className="text-lg font-semibold text-slate-800">
+              Shipment List
+            </h2>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Method
-                </th>
+            <p className="mt-1 text-sm text-slate-500">
+              Total shipments: {shipments.length}
+            </p>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Cost
-                </th>
+          </div>
 
-                <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
-                  Status
-                </th>
-              </tr>
-            </thead>
 
-            <tbody className="divide-y">
-              {shipments.map((shipment) => (
-                <tr
-                  key={shipment.id}
-                  className="hover:bg-slate-50"
-                >
-                  <td className="px-6 py-4 font-medium text-blue-600">
-                    {shipment.tracking}
-                  </td>
+          <div className="overflow-x-auto">
 
-                  <td className="px-6 py-4 text-slate-700">
-                    {shipment.cargo}
-                  </td>
+            <table className="w-full text-left">
 
-                  <td className="px-6 py-4 text-slate-600">
-                    {shipment.business}
-                  </td>
+              <thead className="bg-slate-50">
 
-                  <td className="px-6 py-4 text-slate-600">
-                    {shipment.route}
-                  </td>
+                <tr>
 
-                  <td className="px-6 py-4 text-slate-600">
-                    {shipment.method}
-                  </td>
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    Shipment
+                  </th>
 
-                  <td className="px-6 py-4 font-medium text-slate-700">
-                    {shipment.cost}
-                  </td>
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    Tracking
+                  </th>
 
-                  <td className="px-6 py-4">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
-                        shipment.status
-                      )}`}
-                    >
-                      {shipment.status}
-                    </span>
-                  </td>
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    Route
+                  </th>
+
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    Method
+                  </th>
+
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    Provider
+                  </th>
+
+                  <th className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    Status
+                  </th>
+
                 </tr>
-              ))}
-            </tbody>
-          </table>
+
+              </thead>
+
+
+              <tbody className="divide-y divide-slate-100">
+
+                {shipments.map((shipment) => (
+
+                  <tr key={shipment.id}>
+
+                    {/* Shipment */}
+                    <td className="px-6 py-4">
+
+                      <p className="font-medium text-slate-800">
+                        {shipment.shipment_number}
+                      </p>
+
+                      {shipment.cargo_id && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Cargo ID: {shipment.cargo_id}
+                        </p>
+                      )}
+
+                    </td>
+
+
+                    {/* Tracking */}
+                    <td className="px-6 py-4">
+
+                      <p className="text-sm text-slate-600">
+                        {shipment.tracking_number || 'Not available'}
+                      </p>
+
+                    </td>
+
+
+                    {/* Route */}
+                    <td className="px-6 py-4 text-sm text-slate-600">
+
+                      <div>
+                        {shipment.origin}
+                      </div>
+
+                      <div className="my-1 text-xs text-slate-400">
+                        ↓
+                      </div>
+
+                      <div>
+                        {shipment.destination}
+                      </div>
+
+                    </td>
+
+
+                    {/* Method */}
+                    <td className="px-6 py-4">
+
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                        {shipment.shipping_method}
+                      </span>
+
+                    </td>
+
+
+                    {/* Provider */}
+                    <td className="px-6 py-4 text-sm text-slate-600">
+
+                      {shipment.provider_name || 'Not assigned'}
+
+                    </td>
+
+
+                    {/* Status */}
+                    <td className="px-6 py-4">
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          shipment.status === 'Completed' ||
+                          shipment.status === 'Delivered'
+                            ? 'bg-green-100 text-green-700'
+                            : shipment.status === 'In Transit'
+                              ? 'bg-blue-100 text-blue-700'
+                              : shipment.status === 'Cancelled'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-yellow-100 text-yellow-700'
+                        }`}
+                      >
+                        {shipment.status}
+                      </span>
+
+                    </td>
+
+                  </tr>
+
+                ))}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
         </div>
-      </div>
+
+      )}
+
     </div>
   )
 }

@@ -2,8 +2,13 @@ import { useEffect, useState } from 'react'
 
 function Shipments() {
   const [shipments, setShipments] = useState([])
+  const [providers, setProviders] = useState([])
+
   const [loading, setLoading] = useState(true)
+  const [providersLoading, setProvidersLoading] = useState(true)
+
   const [error, setError] = useState('')
+  const [assigningId, setAssigningId] = useState(null)
 
   const token = localStorage.getItem('token')
 
@@ -39,6 +44,7 @@ function Shipments() {
       }
 
       setShipments(Array.isArray(data) ? data : [])
+
     } catch (error) {
       console.error(
         'GET ADMIN SHIPMENTS ERROR:',
@@ -53,8 +59,55 @@ function Shipments() {
     }
   }
 
+  const fetchProviders = async () => {
+    try {
+      setProvidersLoading(true)
+
+      const response = await fetch(
+        'https://smart-cargo.onrender.com/api/admin/providers',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const contentType =
+        response.headers.get('content-type') || ''
+
+      if (!contentType.includes('application/json')) {
+        throw new Error(
+          'Server returned an invalid provider response.'
+        )
+      }
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to load providers'
+        )
+      }
+
+      setProviders(Array.isArray(data) ? data : [])
+
+    } catch (error) {
+      console.error(
+        'GET ADMIN PROVIDERS ERROR:',
+        error
+      )
+
+      setError(
+        error.message || 'Failed to load providers'
+      )
+    } finally {
+      setProvidersLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchShipments()
+    fetchProviders()
   }, [])
 
   const updateStatus = async (id, newStatus) => {
@@ -94,6 +147,7 @@ function Shipments() {
             : shipment
         )
       )
+
     } catch (error) {
       console.error(
         'UPDATE ADMIN SHIPMENT STATUS ERROR:',
@@ -104,6 +158,69 @@ function Shipments() {
         error.message ||
           'Failed to update shipment status'
       )
+    }
+  }
+
+  const assignProvider = async (
+    shipmentId,
+    providerId
+  ) => {
+    if (!providerId) {
+      return
+    }
+
+    try {
+      setError('')
+      setAssigningId(shipmentId)
+
+      const response = await fetch(
+        `https://smart-cargo.onrender.com/api/admin/shipments/${shipmentId}/provider`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            provider_id: Number(providerId),
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'Failed to assign provider'
+        )
+      }
+
+      setShipments((currentShipments) =>
+        currentShipments.map((shipment) =>
+          shipment.id === shipmentId
+            ? {
+                ...shipment,
+                provider_name:
+                  data.provider?.name ||
+                  'Not assigned',
+              }
+            : shipment
+        )
+      )
+
+    } catch (error) {
+      console.error(
+        'ASSIGN PROVIDER ERROR:',
+        error
+      )
+
+      setError(
+        error.message ||
+          'Failed to assign provider'
+      )
+    } finally {
+      setAssigningId(null)
     }
   }
 
@@ -277,6 +394,10 @@ function Shipments() {
                   </th>
 
                   <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
+                    Provider
+                  </th>
+
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600">
                     Status
                   </th>
 
@@ -372,6 +493,57 @@ function Shipments() {
                         {shipment.shipping_method ||
                           'Not Available'}
                       </span>
+
+                    </td>
+
+                    {/* PROVIDER */}
+                    <td className="px-6 py-4">
+
+                      <div className="mb-2 text-sm font-medium text-slate-700">
+                        {shipment.provider_name ||
+                          'Not assigned'}
+                      </div>
+
+                      <select
+                        value=""
+                        disabled={
+                          providersLoading ||
+                          assigningId === shipment.id
+                        }
+                        onChange={(e) =>
+                          assignProvider(
+                            shipment.id,
+                            e.target.value
+                          )
+                        }
+                        className="w-full min-w-[170px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                      >
+
+                        <option value="">
+                          {assigningId === shipment.id
+                            ? 'Assigning...'
+                            : providersLoading
+                              ? 'Loading providers...'
+                              : 'Assign Provider'}
+                        </option>
+
+                        {providers
+                          .filter(
+                            (provider) =>
+                              provider.status === 'Active'
+                          )
+                          .map((provider) => (
+                            <option
+                              key={provider.id}
+                              value={provider.id}
+                            >
+                              {provider.name}
+                              {' — '}
+                              {provider.service_type}
+                            </option>
+                          ))}
+
+                      </select>
 
                     </td>
 

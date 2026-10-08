@@ -1,271 +1,396 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function UpdateShipmentStatus() {
-  const [shipments, setShipments] = useState([
-    {
-      id: 1,
-      tracking: 'SC-10024',
-      cargo: 'Electronic Components',
-      route: 'Mumbai → Dubai',
-      method: 'Air',
-      status: 'In Transit',
-      note: '',
-    },
-    {
-      id: 2,
-      tracking: 'SC-10021',
-      cargo: 'Automobile Parts',
-      route: 'Mumbai → Hamburg',
-      method: 'Sea',
-      status: 'Pickup Pending',
-      note: '',
-    },
-    {
-      id: 3,
-      tracking: 'SC-10018',
-      cargo: 'Textile Products',
-      route: 'Pune → Singapore',
-      method: 'Sea',
-      status: 'Delivered',
-      note: '',
-    },
-  ])
+  const [shipments, setShipments] = useState([])
+  const [selectedShipment, setSelectedShipment] = useState('')
+  const [status, setStatus] = useState('Pending')
 
-  const [selectedId, setSelectedId] = useState(1)
-  const [newStatus, setNewStatus] = useState('In Transit')
-  const [note, setNote] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState(false)
 
-  const selectedShipment = shipments.find(
-    (shipment) => shipment.id === Number(selectedId)
-  )
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const statuses = [
+    'Pending',
+    'In Transit',
+    'Completed',
+    'Cancelled',
+  ]
+
+  useEffect(() => {
+    fetchShipments()
+  }, [])
+
+  const fetchShipments = async () => {
+    try {
+      setLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        'https://smart-cargo.onrender.com/api/provider/shipments/${selectedShipment}/status',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to fetch shipments'
+        )
+      }
+
+      setShipments(data)
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleShipmentChange = (e) => {
-    const id = Number(e.target.value)
-    setSelectedId(id)
+    const shipmentId = e.target.value
 
-    const shipment = shipments.find((item) => item.id === id)
+    setSelectedShipment(shipmentId)
+    setSuccess('')
+    setError('')
 
-    if (shipment) {
-      setNewStatus(shipment.status)
-      setNote(shipment.note)
-    }
-  }
-
-  const handleUpdate = (e) => {
-    e.preventDefault()
-
-    setShipments(
-      shipments.map((shipment) =>
-        shipment.id === Number(selectedId)
-          ? {
-              ...shipment,
-              status: newStatus,
-              note: note,
-            }
-          : shipment
-      )
+    const shipment = shipments.find(
+      (item) => String(item.id) === String(shipmentId)
     )
 
-    setSuccess(true)
-
-    setTimeout(() => {
-      setSuccess(false)
-    }, 3000)
+    if (shipment) {
+      setStatus(shipment.status || 'Pending')
+    }
   }
 
-  const getStatusStyle = (status) => {
-    if (status === 'Delivered') {
-      return 'bg-green-100 text-green-700'
+  const handleUpdate = async (e) => {
+    e.preventDefault()
+
+    setError('')
+    setSuccess('')
+
+    if (!selectedShipment) {
+      setError('Please select a shipment.')
+      return
     }
 
-    if (status === 'In Transit') {
-      return 'bg-blue-100 text-blue-700'
+    if (!status) {
+      setError('Please select a status.')
+      return
     }
 
-    if (status === 'Arrived at Destination') {
-      return 'bg-purple-100 text-purple-700'
-    }
+    try {
+      setUpdating(true)
 
-    if (status === 'Picked Up') {
-      return 'bg-yellow-100 text-yellow-700'
-    }
+      const token = localStorage.getItem('token')
 
-    return 'bg-orange-100 text-orange-700'
+      const response = await fetch(
+        `https://smart-cargo.onrender.com/api/provider/shipments/${selectedShipment}/status`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            status,
+          }),
+        }
+      )
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || 'Failed to update shipment status'
+        )
+      }
+
+      setSuccess(
+        'Shipment status updated successfully.'
+      )
+
+      await fetchShipments()
+
+    } catch (error) {
+      console.error(error)
+      setError(error.message)
+    } finally {
+      setUpdating(false)
+    }
   }
 
   return (
     <div>
+
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-800">
+
+        <h1 className="text-2xl font-bold text-slate-800">
           Update Shipment Status
         </h1>
-        <p className="mt-2 text-slate-500">
-          Update the pickup, transport, and delivery status of assigned shipments.
+
+        <p className="mt-1 text-sm text-slate-500">
+          Update the transportation status of a shipment.
         </p>
+
       </div>
 
-      {/* Success Message */}
-      {success && (
-        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-5 py-4 text-green-700">
-          Shipment status updated successfully.
+
+      {/* Error */}
+      {error && (
+        <div className="mb-6 rounded-lg bg-red-50 p-4 text-sm text-red-700">
+          {error}
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Update Form */}
-        <div className="rounded-xl bg-white p-6 shadow-sm lg:col-span-2">
-          <h2 className="mb-6 text-xl font-semibold text-slate-800">
-            Shipment Status Update
-          </h2>
 
-          <form onSubmit={handleUpdate} className="space-y-5">
-            {/* Shipment */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Select Shipment
-              </label>
+      {/* Success */}
+      {success && (
+        <div className="mb-6 rounded-lg bg-green-50 p-4 text-sm text-green-700">
+          {success}
+        </div>
+      )}
+
+
+      {/* Form */}
+      <div className="max-w-2xl rounded-xl bg-white p-8 shadow-sm">
+
+        <form
+          onSubmit={handleUpdate}
+          className="space-y-6"
+        >
+
+          {/* Shipment */}
+          <div>
+
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              Select Shipment
+            </label>
+
+            {loading ? (
+
+              <div className="rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-500">
+                Loading shipments...
+              </div>
+
+            ) : shipments.length === 0 ? (
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                No shipments available.
+              </div>
+
+            ) : (
 
               <select
-                value={selectedId}
+                value={selectedShipment}
                 onChange={handleShipmentChange}
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
               >
-                {shipments.map((shipment) => (
-                  <option key={shipment.id} value={shipment.id}>
-                    {shipment.tracking} — {shipment.cargo}
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            {/* Status */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Shipment Status
-              </label>
-
-              <select
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-              >
-                <option value="Pickup Pending">Pickup Pending</option>
-                <option value="Picked Up">Picked Up</option>
-                <option value="In Transit">In Transit</option>
-                <option value="Arrived at Destination">
-                  Arrived at Destination
+                <option value="">
+                  Select a shipment
                 </option>
-                <option value="Delivered">Delivered</option>
+
+                {shipments.map((shipment) => (
+
+                  <option
+                    key={shipment.id}
+                    value={shipment.id}
+                  >
+                    {shipment.shipment_number}
+                    {' — '}
+                    {shipment.origin}
+                    {' → '}
+                    {shipment.destination}
+                  </option>
+
+                ))}
+
               </select>
-            </div>
 
-            {/* Note */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Status Note
-              </label>
+            )}
 
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows="5"
-                placeholder="Enter an optional update note..."
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-              />
-            </div>
+          </div>
 
-            {/* Button */}
-            <button
-              type="submit"
-              className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white hover:bg-blue-700"
-            >
-              Update Status
-            </button>
-          </form>
-        </div>
 
-        {/* Shipment Details */}
-        <div className="rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="mb-6 text-xl font-semibold text-slate-800">
-            Shipment Details
-          </h2>
-
+          {/* Current shipment information */}
           {selectedShipment && (
-            <div className="space-y-5">
-              <div>
-                <p className="text-sm text-slate-500">Tracking Number</p>
-                <p className="mt-1 font-semibold text-slate-800">
-                  {selectedShipment.tracking}
-                </p>
-              </div>
 
-              <div>
-                <p className="text-sm text-slate-500">Cargo</p>
-                <p className="mt-1 font-semibold text-slate-800">
-                  {selectedShipment.cargo}
-                </p>
-              </div>
+            <div className="rounded-lg bg-slate-50 p-5">
 
-              <div>
-                <p className="text-sm text-slate-500">Route</p>
-                <p className="mt-1 font-semibold text-slate-800">
-                  {selectedShipment.route}
-                </p>
-              </div>
+              {(() => {
 
-              <div>
-                <p className="text-sm text-slate-500">Transport Method</p>
-                <p className="mt-1 font-semibold text-slate-800">
-                  {selectedShipment.method}
-                </p>
-              </div>
+                const shipment = shipments.find(
+                  (item) =>
+                    String(item.id) ===
+                    String(selectedShipment)
+                )
 
-              <div>
-                <p className="text-sm text-slate-500">Current Status</p>
-                <span
-                  className={`mt-2 inline-block rounded-full px-3 py-1 text-sm font-medium ${getStatusStyle(
-                    selectedShipment.status
-                  )}`}
-                >
-                  {selectedShipment.status}
-                </span>
-              </div>
+                if (!shipment) {
+                  return null
+                }
+
+                return (
+                  <div className="grid gap-4 sm:grid-cols-2">
+
+                    <div>
+
+                      <p className="text-xs text-slate-500">
+                        Shipment Number
+                      </p>
+
+                      <p className="mt-1 font-medium text-slate-800">
+                        {shipment.shipment_number}
+                      </p>
+
+                    </div>
+
+
+                    <div>
+
+                      <p className="text-xs text-slate-500">
+                        Tracking Number
+                      </p>
+
+                      <p className="mt-1 font-medium text-slate-800">
+                        {shipment.tracking_number ||
+                          'Not available'}
+                      </p>
+
+                    </div>
+
+
+                    <div>
+
+                      <p className="text-xs text-slate-500">
+                        Origin
+                      </p>
+
+                      <p className="mt-1 font-medium text-slate-800">
+                        {shipment.origin}
+                      </p>
+
+                    </div>
+
+
+                    <div>
+
+                      <p className="text-xs text-slate-500">
+                        Destination
+                      </p>
+
+                      <p className="mt-1 font-medium text-slate-800">
+                        {shipment.destination}
+                      </p>
+
+                    </div>
+
+                  </div>
+                )
+
+              })()}
+
             </div>
+
           )}
-        </div>
+
+
+          {/* Status */}
+          <div>
+
+            <label className="mb-2 block text-sm font-medium text-slate-700">
+              New Shipment Status
+            </label>
+
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            >
+
+              {statuses.map((item) => (
+
+                <option
+                  key={item}
+                  value={item}
+                >
+                  {item}
+                </option>
+
+              ))}
+
+            </select>
+
+          </div>
+
+
+          {/* Update Button */}
+          <button
+            type="submit"
+            disabled={
+              updating ||
+              loading ||
+              !selectedShipment
+            }
+            className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+          >
+            {updating
+              ? 'Updating...'
+              : 'Update Shipment Status'}
+          </button>
+
+        </form>
+
       </div>
 
-      {/* Status Information */}
-      <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-        <h2 className="mb-5 text-xl font-semibold text-slate-800">
-          Status Flow
+
+      {/* Status Flow */}
+      <div className="mt-8 rounded-xl bg-white p-6 shadow-sm">
+
+        <h2 className="text-lg font-semibold text-slate-800">
+          Shipment Status Flow
         </h2>
 
-        <div className="grid gap-4 md:grid-cols-5">
-          {[
-            'Pickup Pending',
-            'Picked Up',
-            'In Transit',
-            'Arrived at Destination',
-            'Delivered',
-          ].map((status, index) => (
-            <div
-              key={status}
-              className="rounded-lg border border-slate-200 p-4 text-center"
-            >
-              <div className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-semibold text-blue-700">
-                {index + 1}
-              </div>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
 
-              <p className="text-sm font-medium text-slate-700">
-                {status}
-              </p>
-            </div>
-          ))}
+          <span className="rounded-full bg-yellow-100 px-4 py-2 text-sm font-medium text-yellow-700">
+            Pending
+          </span>
+
+          <span className="text-slate-400">
+            →
+          </span>
+
+          <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-medium text-blue-700">
+            In Transit
+          </span>
+
+          <span className="text-slate-400">
+            →
+          </span>
+
+          <span className="rounded-full bg-green-100 px-4 py-2 text-sm font-medium text-green-700">
+            Completed
+          </span>
+
         </div>
+
+        <p className="mt-4 text-sm text-slate-500">
+          A shipment may also be marked as Cancelled when required.
+        </p>
+
       </div>
+
     </div>
   )
 }
