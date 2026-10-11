@@ -1,4 +1,30 @@
-import { useEffect, useState } from 'react'
+
+import { useEffect, useMemo, useState } from 'react'
+
+const API_URL = 'https://smart-cargo.onrender.com/api/cargo'
+
+const initialFormData = {
+  name: '',
+  category: '',
+  quantity: '1',
+  weight: '',
+  dimensions: '',
+  packageType: '',
+  packages: '1',
+  value: '',
+  currency: 'USD',
+}
+
+const categories = [
+  'Electronics',
+  'Textiles',
+  'Food & Beverages',
+  'Machinery',
+  'Chemicals',
+  'Furniture',
+  'Agricultural Products',
+  'Other',
+]
 
 function Cargo() {
   const [cargoItems, setCargoItems] = useState([])
@@ -6,604 +32,618 @@ function Cargo() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const [formData, setFormData] = useState(initialFormData)
 
-  const [formData, setFormData] = useState({
-    name: '',
-    category: '',
-    quantity: '',
-    weight: '',
-    dimensions: '',
-    packageType: '',
-    packages: '',
-    value: '',
-    currency: 'USD',
-  })
+  const getToken = () => localStorage.getItem('token')
 
-  // Fetch cargo from backend
   const fetchCargo = async () => {
+    setLoading(true)
+    setError('')
+
     try {
-      setLoading(true)
-      setError('')
+      const token = getToken()
 
-      const token = localStorage.getItem('token')
-
-      const response = await fetch(
-        'https://smart-cargo.onrender.com/api/cargo',
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch cargo')
+      if (!token) {
+        setError('Please log in to view your cargo.')
+        return
       }
 
-      setCargoItems(data)
-    } catch (error) {
-      console.error(error)
-      setError(error.message || 'Unable to load cargo')
+      const response = await fetch(API_URL, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to load cargo.')
+      }
+
+      setCargoItems(Array.isArray(data) ? data : data.cargo || [])
+    } catch (err) {
+      setError(err.message || 'Unable to connect to the server.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Load cargo when page opens
   useEffect(() => {
     fetchCargo()
   }, [])
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
+  const handleChange = (event) => {
+    const { name, value } = event.target
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }))
   }
 
-  // Add cargo to backend
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const resetForm = () => {
+    setFormData({ ...initialFormData })
+    setError('')
+    setSuccess('')
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setError('')
+    setSuccess('')
+
+    const quantity = Number(formData.quantity)
+    const weight = Number(formData.weight)
+    const packages = Number(formData.packages)
+    const declaredValue = Number(formData.value)
+
+    if (!formData.name.trim()) {
+      setError('Please enter the product name.')
+      return
+    }
+
+    if (!formData.category) {
+      setError('Please select a cargo category.')
+      return
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setError('Quantity must be a whole number greater than zero.')
+      return
+    }
+
+    if (!Number.isFinite(weight) || weight <= 0) {
+      setError('Weight must be greater than zero.')
+      return
+    }
+
+    if (!Number.isInteger(packages) || packages < 1) {
+      setError('Number of packages must be a whole number greater than zero.')
+      return
+    }
+
+    if (!Number.isFinite(declaredValue) || declaredValue < 0) {
+      setError('Declared value cannot be negative.')
+      return
+    }
 
     try {
       setSaving(true)
-      setError('')
 
-      const token = localStorage.getItem('token')
+      const token = getToken()
 
-      const response = await fetch(
-        'https://smart-cargo.onrender.com/api/cargo',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            product_name: formData.name,
-            category: formData.category,
-            quantity: Number(formData.quantity),
-            weight: Number(formData.weight),
-            dimensions: formData.dimensions,
-            package_type: formData.packageType,
-            number_of_packages: Number(formData.packages),
-            declared_value: Number(formData.value),
-            currency: formData.currency,
-          }),
-        }
-      )
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to add cargo')
+      if (!token) {
+        throw new Error('Please log in before adding cargo.')
       }
 
-      // Add newly created cargo to the table
-      setCargoItems((currentItems) => [
-        data.cargo,
-        ...currentItems,
-      ])
-
-      // Reset form
-      setFormData({
-        name: '',
-        category: '',
-        quantity: '',
-        weight: '',
-        dimensions: '',
-        packageType: '',
-        packages: '',
-        value: '',
-        currency: 'USD',
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          product_name: formData.name.trim(),
+          category: formData.category,
+          quantity,
+          weight,
+          dimensions: formData.dimensions.trim(),
+          package_type: formData.packageType,
+          number_of_packages: packages,
+          declared_value: declaredValue,
+          currency: formData.currency,
+        }),
       })
 
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add cargo.')
+      }
+
+      if (data.cargo?.id) {
+        setCargoItems((previous) => [data.cargo, ...previous])
+      } else {
+        await fetchCargo()
+      }
+
       setShowModal(false)
-    } catch (error) {
-      console.error(error)
-      setError(error.message || 'Unable to save cargo')
+      resetForm()
+      setSuccess('Cargo added successfully.')
+    } catch (err) {
+      setError(err.message || 'Unable to add cargo.')
     } finally {
       setSaving(false)
     }
   }
 
-  // Delete cargo from backend
-  const handleDelete = async (id) => {
-    try {
-      setError('')
+  const filteredCargo = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase()
 
-      const token = localStorage.getItem('token')
+    return cargoItems.filter((item) => {
+      const matchesSearch =
+        (item.product_name || '').toLowerCase().includes(search) ||
+        (item.category || '').toLowerCase().includes(search)
 
-      const response = await fetch(
-        `https://smart-cargo.onrender.com/api/cargo/${id}`,
-        {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
+      const matchesCategory =
+        selectedCategory === 'All' ||
+        item.category === selectedCategory
 
-      const data = await response.json()
+      return matchesSearch && matchesCategory
+    })
+  }, [cargoItems, searchTerm, selectedCategory])
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to delete cargo')
-      }
+  const totalWeight = cargoItems.reduce(
+    (total, item) => total + Number(item.weight || 0),
+    0
+  )
 
-      setCargoItems((currentItems) =>
-        currentItems.filter((cargo) => cargo.id !== id)
-      )
-    } catch (error) {
-      console.error(error)
-      setError(error.message || 'Unable to delete cargo')
-    }
+  const totalPackages = cargoItems.reduce(
+    (total, item) => total + Number(item.number_of_packages || 0),
+    0
+  )
+
+  const totalDeclaredValue = cargoItems.reduce(
+    (total, item) => total + Number(item.declared_value || 0),
+    0
+  )
+
+  const closeModal = () => {
+    if (saving) return
+    setShowModal(false)
+    resetForm()
   }
 
   return (
-    <div>
-
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
       {/* Page Header */}
-      <div className="flex justify-between items-center mb-6">
-
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold text-slate-800">
             Cargo Management
-          </h3>
-
-          <p className="text-slate-500 mt-1">
-            Manage your cargo items and shipment details.
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage your cargo details and prepare for shipment creation.
           </p>
         </div>
 
         <button
-          onClick={() => setShowModal(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg font-medium"
+          type="button"
+          onClick={() => {
+            resetForm()
+            setShowModal(true)
+          }}
+          className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
           + Add Cargo
         </button>
-
       </div>
 
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-          {error}
+      {/* Notifications */}
+      {success && (
+        <div className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          {success}
         </div>
       )}
 
+      {error && !showModal && (
+        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+          <button
+            type="button"
+            onClick={fetchCargo}
+            className="ml-3 font-semibold underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
-      {/* Search and Filter */}
-      <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-
-        <div className="flex flex-col md:flex-row gap-4">
-
-          <input
-            type="text"
-            placeholder="Search cargo..."
-            className="flex-1 border border-slate-200 rounded-lg px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-          />
-
-          <select className="border border-slate-200 rounded-lg px-4 py-3">
-
-            <option>All Categories</option>
-            <option>Electronics</option>
-            <option>Textiles</option>
-            <option>Machinery</option>
-            <option>Food</option>
-
-          </select>
-
+      {/* Summary Cards */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Total Cargo Items</p>
+          <p className="mt-2 text-3xl font-bold text-slate-800">
+            {cargoItems.length}
+          </p>
         </div>
 
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Total Weight</p>
+          <p className="mt-2 text-3xl font-bold text-slate-800">
+            {totalWeight.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}{' '}
+            <span className="text-base font-medium">kg</span>
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Total Packages</p>
+          <p className="mt-2 text-3xl font-bold text-slate-800">
+            {totalPackages}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-slate-500">Total Declared Value</p>
+          <p className="mt-2 text-3xl font-bold text-slate-800">
+            {totalDeclaredValue.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}{' '}
+            <span className="text-base font-medium">USD*</span>
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            *Displayed as a simple total; cargo currencies may differ.
+          </p>
+        </div>
       </div>
 
-
-      {/* Cargo Table */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-
-        <div className="p-6 border-b">
-
-          <h4 className="text-lg font-bold">
-            Cargo Items
-          </h4>
-
-          <p className="text-sm text-slate-500 mt-1">
-            {loading
-              ? 'Loading cargo...'
-              : `${cargoItems.length} cargo items found`}
+      {/* Cargo List */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-5">
+          <h2 className="text-lg font-bold text-slate-800">Cargo Inventory</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            View and search your saved cargo items.
           </p>
 
+          <div className="mt-5 flex flex-col gap-3 md:flex-row">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search by product name or category..."
+              className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+
+            <select
+              value={selectedCategory}
+              onChange={(event) => setSelectedCategory(event.target.value)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 md:w-64"
+            >
+              <option value="All">All Categories</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
+        {loading ? (
+          <div className="p-12 text-center text-slate-500">
+            Loading cargo...
+          </div>
+        ) : filteredCargo.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="mb-3 text-4xl">📦</div>
+            <h3 className="font-semibold text-slate-800">
+              {cargoItems.length === 0
+                ? 'No cargo added yet'
+                : 'No matching cargo found'}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">
+              {cargoItems.length === 0
+                ? 'Add your first cargo item to get started.'
+                : 'Try a different search term or category.'}
+            </p>
 
-        <div className="overflow-x-auto">
-
-          <table className="w-full">
-
-            <thead className="bg-slate-50">
-
-              <tr>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Product
-                </th>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Category
-                </th>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Quantity
-                </th>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Weight
-                </th>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Packages
-                </th>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Declared Value
-                </th>
-
-                <th className="text-left px-6 py-4 text-sm">
-                  Actions
-                </th>
-
-              </tr>
-
-            </thead>
-
-
-            <tbody>
-
-              {loading ? (
-
+            {cargoItems.length === 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  resetForm()
+                  setShowModal(true)
+                }}
+                className="mt-5 rounded-lg bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
+              >
+                Add Your First Cargo
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  <td
-                    colSpan="7"
-                    className="text-center py-10 text-slate-500"
-                  >
-                    Loading cargo...
-                  </td>
+                  <th className="px-5 py-4 font-semibold">Product</th>
+                  <th className="px-5 py-4 font-semibold">Category</th>
+                  <th className="px-5 py-4 font-semibold">Quantity</th>
+                  <th className="px-5 py-4 font-semibold">Weight</th>
+                  <th className="px-5 py-4 font-semibold">Packages</th>
+                  <th className="px-5 py-4 font-semibold">Declared Value</th>
+                  <th className="px-5 py-4 font-semibold">Package Type</th>
                 </tr>
+              </thead>
 
-              ) : cargoItems.length === 0 ? (
-
-                <tr>
-                  <td
-                    colSpan="7"
-                    className="text-center py-10 text-slate-500"
-                  >
-                    No cargo items found.
-                  </td>
-                </tr>
-
-              ) : (
-
-                cargoItems.map((cargo) => (
-
+              <tbody className="divide-y divide-slate-100">
+                {filteredCargo.map((item) => (
                   <tr
-                    key={cargo.id}
-                    className="border-t hover:bg-slate-50"
+                    key={item.id}
+                    className="transition hover:bg-slate-50"
                   >
-
-                    <td className="px-6 py-4 font-medium">
-                      {cargo.product_name}
+                    <td className="px-5 py-4 font-medium text-slate-800">
+                      {item.product_name}
+                      {item.dimensions && (
+                        <p className="mt-1 text-xs text-slate-400">
+                          Dimensions: {item.dimensions}
+                        </p>
+                      )}
                     </td>
 
-                    <td className="px-6 py-4">
-                      {cargo.category}
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.category}
                     </td>
 
-                    <td className="px-6 py-4">
-                      {cargo.quantity}
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.quantity}
                     </td>
 
-                    <td className="px-6 py-4">
-                      {cargo.weight} kg
+                    <td className="px-5 py-4 text-slate-600">
+                      {Number(item.weight).toLocaleString()} kg
                     </td>
 
-                    <td className="px-6 py-4">
-                      {cargo.number_of_packages}
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.number_of_packages}
                     </td>
 
-                    <td className="px-6 py-4 font-medium">
-                      {cargo.currency} {cargo.declared_value}
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.currency || 'USD'}{' '}
+                      {Number(item.declared_value).toLocaleString()}
                     </td>
 
-                    <td className="px-6 py-4">
-
-                      <button
-                        onClick={() => handleDelete(cargo.id)}
-                        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
-                      >
-                        Delete
-                      </button>
-
+                    <td className="px-5 py-4 text-slate-600">
+                      {item.package_type || '—'}
                     </td>
-
                   </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                ))
-
-              )}
-
-            </tbody>
-
-          </table>
-
+        <div className="border-t border-slate-200 px-5 py-4 text-sm text-slate-500">
+          Showing {filteredCargo.length} of {cargoItems.length} cargo items
         </div>
-
       </div>
-
 
       {/* Add Cargo Modal */}
       {showModal && (
-
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b">
-
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeModal()
+          }}
+        >
+          <div className="my-auto w-full max-w-3xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <div>
-                <h3 className="text-xl font-bold">
-                  Add Cargo
-                </h3>
-
-                <p className="text-sm text-slate-500 mt-1">
-                  Enter the details of your cargo.
+                <h2 className="text-xl font-bold text-slate-800">
+                  Add Cargo Item
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Enter the details of the cargo you want to ship.
                 </p>
               </div>
 
               <button
-                onClick={() => setShowModal(false)}
-                className="text-slate-500 hover:text-slate-800 text-xl"
+                type="button"
+                onClick={closeModal}
+                disabled={saving}
+                aria-label="Close modal"
+                className="rounded-lg px-3 py-2 text-2xl text-slate-500 hover:bg-slate-100 disabled:opacity-50"
               >
-                ✕
+                ×
               </button>
-
             </div>
 
+            <form onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 gap-5 p-6 md:grid-cols-2">
+                {error && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 md:col-span-2">
+                    {error}
+                  </div>
+                )}
 
-            {/* Form */}
-            <form
-              onSubmit={handleSubmit}
-              className="p-6"
-            >
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-
-                {/* Product Name */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Product Name
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Product Name *
                   </label>
-
                   <input
-                    required
+                    type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
+                    required
+                    maxLength={150}
                     placeholder="e.g. Electronic Components"
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
 
-
-                {/* Category */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Category
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Category *
                   </label>
-
                   <select
-                    required
                     name="category"
                     value={formData.category}
                     onChange={handleChange}
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    required
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
                   >
-
-                    <option value="">
-                      Select Category
-                    </option>
-
-                    <option>Electronics</option>
-                    <option>Textiles</option>
-                    <option>Machinery</option>
-                    <option>Food</option>
-                    <option>Automotive</option>
-                    <option>Other</option>
-
+                    <option value="">Select category</option>
+                    {categories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-
-                {/* Quantity */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Quantity
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Quantity *
                   </label>
-
                   <input
-                    required
                     type="number"
-                    min="1"
                     name="quantity"
                     value={formData.quantity}
                     onChange={handleChange}
-                    placeholder="e.g. 100"
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    min="1"
+                    step="1"
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
-
-                {/* Weight */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Weight (kg)
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Total Weight (kg) *
                   </label>
-
                   <input
-                    required
                     type="number"
-                    min="0"
-                    step="0.01"
                     name="weight"
                     value={formData.weight}
                     onChange={handleChange}
-                    placeholder="e.g. 350"
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    placeholder="e.g. 250"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
                   />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Enter the total cargo weight in kilograms.
+                  </p>
                 </div>
 
-
-                {/* Dimensions */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Dimensions
                   </label>
-
                   <input
-                    required
+                    type="text"
                     name="dimensions"
                     value={formData.dimensions}
                     onChange={handleChange}
-                    placeholder="e.g. 40 × 30 × 25 cm"
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    placeholder="e.g. 100 × 80 × 60 cm"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
-
-                {/* Package Type */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
                     Package Type
                   </label>
-
                   <select
-                    required
                     name="packageType"
                     value={formData.packageType}
                     onChange={handleChange}
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
                   >
-
-                    <option value="">
-                      Select Package Type
-                    </option>
-
-                    <option>Box</option>
-                    <option>Crate</option>
-                    <option>Bale</option>
-                    <option>Pallet</option>
-                    <option>Container</option>
-
+                    <option value="">Select package type</option>
+                    <option value="Box">Box</option>
+                    <option value="Pallet">Pallet</option>
+                    <option value="Crate">Crate</option>
+                    <option value="Container">Container</option>
+                    <option value="Bag">Bag</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
 
-
-                {/* Number of Packages */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Number of Packages
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Number of Packages *
                   </label>
-
                   <input
-                    required
                     type="number"
-                    min="1"
                     name="packages"
                     value={formData.packages}
                     onChange={handleChange}
-                    placeholder="e.g. 12"
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    min="1"
+                    step="1"
+                    required
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
-
-                {/* Declared Value */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Declared Value
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Declared Value *
                   </label>
-
                   <input
-                    required
                     type="number"
-                    min="0"
-                    step="0.01"
                     name="value"
                     value={formData.value}
                     onChange={handleChange}
-                    placeholder="e.g. 18500"
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    min="0"
+                    step="0.01"
+                    required
+                    placeholder="Enter cargo value"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
                   />
                 </div>
 
-
-                {/* Currency */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Currency
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Currency *
                   </label>
-
                   <select
                     name="currency"
                     value={formData.currency}
                     onChange={handleChange}
-                    className="w-full border border-slate-200 rounded-lg px-4 py-3"
+                    required
+                    className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
                   >
-
-                    <option>USD</option>
-                    <option>INR</option>
-                    <option>EUR</option>
-                    <option>GBP</option>
-                    <option>AED</option>
-                    <option>SGD</option>
-
+                    <option value="USD">USD - US Dollar</option>
+                    <option value="INR">INR - Indian Rupee</option>
+                    <option value="EUR">EUR - Euro</option>
+                    <option value="GBP">GBP - British Pound</option>
                   </select>
                 </div>
 
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 md:col-span-2">
+                  <p className="text-sm font-semibold text-blue-800">
+                    Shipping cost estimation
+                  </p>
+                  <p className="mt-1 text-sm text-blue-700">
+                    The cargo weight entered here can be used to estimate
+                    shipping costs after a logistics provider and its price
+                    per kilogram are selected.
+                  </p>
+                </div>
               </div>
 
-
-              {/* Buttons */}
-              <div className="flex justify-end gap-3 mt-8">
-
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-200 px-6 py-5 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-5 py-3 border border-slate-200 rounded-lg hover:bg-slate-50"
+                  onClick={closeModal}
+                  disabled={saving}
+                  className="rounded-lg border border-slate-300 px-5 py-3 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -611,21 +651,15 @@ function Cargo() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-60"
+                  className="rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? 'Saving...' : 'Save Cargo'}
                 </button>
-
               </div>
-
             </form>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   )
 }
